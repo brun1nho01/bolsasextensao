@@ -1,0 +1,14 @@
+# Principais dependências da aplicação
+fastapi==0.116.1
+uvicorn==0.35.0
+python-dotenv==1.1.1
+supabase==2.18.1
+google-generativeai==0.8.5
+PyMuPDF==1.26.4
+beautifulsoup4==4.13.5
+requests==2.32.5
+
+# Ferramentas de desenvolvimento e deploy (opcional, mas bom manter)
+python-semantic-release==7.33.2
+twine==3.8.0
+wheel==0.45.1

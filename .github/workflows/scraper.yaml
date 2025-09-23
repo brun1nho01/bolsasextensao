@@ -1,0 +1,54 @@
+name: Executar Scraper
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-scraper:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependências
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      # ===================================================================
+      # ================ COLE O NOVO PASSO DE DEBUG AQUI ================
+      # ===================================================================
+      - name: Debugar Variáveis de Ambiente
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+        run: |
+          echo "--- Início do Debug ---"
+          if [ -z "$SUPABASE_URL" ]; then
+            echo "ERRO DEBUG: A variável SUPABASE_URL está VAZIA ou não foi definida."
+          else
+            echo "SUCESSO DEBUG: A variável SUPABASE_URL foi recebida."
+            echo "Verificação da URL (primeiros 8 caracteres): ${SUPABASE_URL:0:8}"
+          fi
+
+          if [ -z "$SUPABASE_KEY" ]; then
+            echo "ERRO DEBUG: A variável SUPABASE_KEY está VAZIA ou não foi definida."
+          else
+            echo "SUCESSO DEBUG: A variável SUPABASE_KEY foi recebida."
+          fi
+          echo "--- Fim do Debug ---"
+      # ===================================================================
+      # ===================================================================
+
+      - name: Rodar scraper
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          GEMINI_API_KEYS: ${{ secrets.GEMINI_API_KEYS }}
+        run: python -m backend.tasks

@@ -1,0 +1,10 @@
+{
+  "devDependencies": {
+    "@types/node": "^24.3.1"
+  },
+  "dependencies": {
+    "@tanstack/react-query-persist-client": "^5.90.1",
+    "compare-versions": "^6.1.1",
+    "embla-carousel-autoplay": "^8.6.0"
+  }
+}
