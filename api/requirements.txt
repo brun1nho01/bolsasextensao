@@ -1,2 +1,5 @@
 # Dependências mínimas para Supabase
 supabase==2.18.1
+
+# WhatsApp via Twilio (opcional - funciona sem)
+twilio==9.2.3

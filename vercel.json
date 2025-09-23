@@ -3,6 +3,12 @@
   "outputDirectory": "frontend/dist",
   "installCommand": "cd frontend && npm install",
   "devCommand": "cd frontend && npm run dev",
+  "crons": [
+    {
+      "path": "/api/scrape?secret=my-scraping-secret-2024",
+      "schedule": "0 4 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

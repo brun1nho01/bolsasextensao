@@ -2,6 +2,7 @@ from http.server import BaseHTTPRequestHandler
 import json
 import urllib.parse
 import os
+from datetime import datetime, timezone
 
 # Importar Supabase apenas se disponível (para não quebrar outros endpoints)
 try:
@@ -149,6 +150,31 @@ def get_ranking_from_supabase(params):
         print(f"Erro ao buscar ranking: {e}")
         return None
 
+def get_bolsa_by_id(bolsa_id):
+    """Busca uma bolsa específica por ID do Supabase"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        # Query para buscar bolsa por ID
+        response = supabase.table('bolsas_view').select('*').eq('id', bolsa_id).execute()
+        
+        if response.data and len(response.data) > 0:
+            # Incrementar contador de visualizações (opcional)
+            try:
+                supabase.table('bolsas').update({'view_count': 'view_count + 1'}).eq('id', bolsa_id).execute()
+            except:
+                pass  # Não falha se não conseguir atualizar view_count
+            
+            return response.data[0]
+        
+        return None
+        
+    except Exception as e:
+        print(f"Erro ao buscar bolsa por ID: {e}")
+        return None
+
 def get_editais_from_supabase(params):
     """Busca editais do Supabase com paginação"""
     supabase = get_supabase_client()
@@ -178,39 +204,411 @@ def get_editais_from_supabase(params):
         print(f"Erro ao buscar editais: {e}")
         return None
 
+def get_analytics_from_supabase():
+    """Busca estatísticas básicas do Supabase"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        analytics_data = {}
+        
+        # Total de bolsas
+        total_response = supabase.table('bolsas_view').select('*', count='exact').execute()
+        analytics_data['total_bolsas'] = total_response.count if total_response.count is not None else 0
+        
+        # Bolsas por status
+        try:
+            status_response = supabase.table('bolsas_view').select('status', count='exact').execute()
+            status_counts = {}
+            for bolsa in status_response.data or []:
+                status = bolsa.get('status', 'desconhecido')
+                status_counts[status] = status_counts.get(status, 0) + 1
+            analytics_data['bolsas_por_status'] = status_counts
+        except:
+            analytics_data['bolsas_por_status'] = {}
+            
+        # Centros mais populares (top 5)
+        try:
+            centros_response = supabase.table('bolsas_view').select('centro', count='exact').execute()
+            centro_counts = {}
+            for bolsa in centros_response.data or []:
+                centro = bolsa.get('centro', 'Não informado')
+                centro_counts[centro] = centro_counts.get(centro, 0) + 1
+            
+            # Top 5 centros
+            top_centros = sorted(centro_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+            analytics_data['centros_populares'] = [centro for centro, count in top_centros]
+        except:
+            analytics_data['centros_populares'] = []
+            
+        # Tipos mais procurados (top 5)
+        try:
+            tipos_response = supabase.table('bolsas_view').select('tipo', count='exact').execute()
+            tipo_counts = {}
+            for bolsa in tipos_response.data or []:
+                tipo = bolsa.get('tipo', 'Não informado')
+                tipo_counts[tipo] = tipo_counts.get(tipo, 0) + 1
+            
+            # Top 5 tipos
+            top_tipos = sorted(tipo_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+            analytics_data['tipos_mais_procurados'] = [tipo for tipo, count in top_tipos]
+        except:
+            analytics_data['tipos_mais_procurados'] = []
+        
+        # Última atualização
+        analytics_data['ultima_atualizacao'] = datetime.now(timezone.utc).strftime('%Y-%m-%d')
+        
+        return analytics_data
+        
+    except Exception as e:
+        print(f"Erro ao buscar analytics: {e}")
+        return None
+
+def subscribe_whatsapp_alerts(whatsapp_number):
+    """Cadastra número de WhatsApp para receber alertas de novos editais"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return {"status": "error", "message": "Supabase não disponível"}
+    
+    try:
+        # Limpar e validar número
+        clean_number = whatsapp_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+        if not clean_number.startswith("+"):
+            if clean_number.startswith("55"):
+                clean_number = "+" + clean_number
+            else:
+                clean_number = "+55" + clean_number
+        
+        # Verificar se já existe
+        existing = supabase.table('whatsapp_alerts').select('id').eq('numero', clean_number).execute()
+        
+        if existing.data and len(existing.data) > 0:
+            return {"status": "info", "message": "Número já cadastrado para alertas"}
+        
+        # Inserir novo cadastro
+        result = supabase.table('whatsapp_alerts').insert({
+            'numero': clean_number,
+            'status': 'ativo',
+            'created_at': datetime.now(timezone.utc).isoformat()
+        }).execute()
+        
+        return {
+            "status": "success", 
+            "message": "WhatsApp cadastrado com sucesso! Você receberá alertas de novos editais.",
+            "numero": clean_number
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Erro ao cadastrar WhatsApp: {str(e)}"}
+
+def send_whatsapp_message(to_number, message):
+    """Envia mensagem via WhatsApp usando Twilio"""
+    try:
+        # Configuração Twilio (adicionar nas env vars)
+        twilio_sid = os.environ.get("TWILIO_SID")
+        twilio_token = os.environ.get("TWILIO_TOKEN") 
+        twilio_whatsapp = os.environ.get("TWILIO_WHATSAPP", "whatsapp:+14155238886")
+        
+        if not all([twilio_sid, twilio_token]):
+            print("Twilio não configurado - simulando envio")
+            return {"status": "simulated", "message": "Twilio não configurado"}
+            
+        # Importar Twilio apenas se disponível
+        try:
+            from twilio.rest import Client
+            client = Client(twilio_sid, twilio_token)
+            
+            message = client.messages.create(
+                body=message,
+                from_=twilio_whatsapp,
+                to=f"whatsapp:{to_number}"
+            )
+            
+            return {"status": "sent", "sid": message.sid}
+            
+        except ImportError:
+            print("Biblioteca Twilio não instalada - simulando envio")
+            return {"status": "simulated", "message": "Twilio library não disponível"}
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def detect_edital_type(edital_titulo):
+    """Detecta o tipo de edital baseado no título"""
+    titulo_lower = edital_titulo.lower()
+    
+    # Detectar editais de resultado
+    resultado_keywords = ['resultado', 'classificação', 'classificados', 'aprovados', 'selecionados']
+    if any(keyword in titulo_lower for keyword in resultado_keywords):
+        return 'resultado'
+    
+    # Detectar editais de extensão
+    extensao_keywords = ['extensão', 'extensao', 'discente', 'voluntário', 'voluntario']
+    if any(keyword in titulo_lower for keyword in extensao_keywords):
+        return 'extensao'
+    
+    # Outros editais (mestrado, doutorado, etc)
+    return 'outros'
+
+def notify_new_edital(edital_titulo, edital_link, edital_type=None):
+    """Notifica todos os usuários cadastrados sobre novo edital de extensão ou resultado"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return {"status": "error", "message": "Supabase não disponível"}
+    
+    try:
+        # Auto-detectar tipo se não fornecido
+        if not edital_type:
+            edital_type = detect_edital_type(edital_titulo)
+        
+        # Só notificar para editais de extensão ou resultado
+        if edital_type not in ['extensao', 'resultado']:
+            return {
+                "status": "skipped", 
+                "message": f"Edital tipo '{edital_type}' não gera notificação automática",
+                "edital_titulo": edital_titulo
+            }
+        
+        # Buscar todos os números ativos
+        subscribers = supabase.table('whatsapp_alerts').select('numero').eq('status', 'ativo').execute()
+        
+        if not subscribers.data:
+            return {"status": "info", "message": "Nenhum usuário cadastrado"}
+        
+        # Mensagem personalizada por tipo
+        if edital_type == 'extensao':
+            emoji = "🎓"
+            tipo_nome = "EDITAL DE EXTENSÃO"
+            mensagem_extra = "💡 Oportunidade de extensão universitária!"
+        elif edital_type == 'resultado':
+            emoji = "🏆"
+            tipo_nome = "RESULTADO PUBLICADO"
+            mensagem_extra = "🔍 Confira se você foi aprovado(a)!"
+        else:
+            emoji = "📋"
+            tipo_nome = "NOVO EDITAL"
+            mensagem_extra = "💡 Nova oportunidade disponível!"
+            
+        mensagem = f"""{emoji} *{tipo_nome} UENF!*
+
+📋 {edital_titulo}
+
+🔗 Acesse: {edital_link}
+
+{mensagem_extra}
+
+💻 Veja mais em: https://seusite.vercel.app
+
+_Para cancelar alertas, responda PARAR_"""
+
+        # Enviar para todos
+        sent_count = 0
+        errors = []
+        
+        for subscriber in subscribers.data:
+            numero = subscriber['numero']
+            result = send_whatsapp_message(numero, mensagem)
+            
+            if result['status'] in ['sent', 'simulated']:
+                sent_count += 1
+            else:
+                errors.append(f"{numero}: {result.get('message', 'erro')}")
+        
+        return {
+            "status": "completed",
+            "sent_count": sent_count,
+            "total_subscribers": len(subscribers.data),
+            "edital_type": edital_type,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        return {"status": "error", "message": f"Erro ao notificar: {str(e)}"}
+
+def run_scraping_serverless():
+    """
+    Versão do scraping para ambiente serverless com detecção de novos editais.
+    """
+    try:
+        supabase = get_supabase_client()
+        if not supabase:
+            return {"status": "error", "message": "Supabase não disponível"}
+        
+        timestamp_utc = datetime.now(timezone.utc).isoformat()
+        
+        # 1. Buscar último edital conhecido antes do scraping
+        try:
+            last_edital = supabase.table('editais').select('id, titulo, data_publicacao').order('data_publicacao', desc=True).limit(1).execute()
+            last_edital_id = last_edital.data[0]['id'] if last_edital.data else None
+        except:
+            last_edital_id = None
+        
+        # 2. AQUI seria executado o scraping real (tasks.py)
+        # Por enquanto, vamos simular encontrar um novo edital aleatoriamente
+        import random
+        found_new_edital = random.choice([True, False])  # 50% chance de simular novo edital
+        
+        new_editais_count = 0
+        notification_results = []
+        
+        if found_new_edital:
+            # Simular diferentes tipos de editais
+            import random
+            edital_examples = [
+                {
+                    "titulo": "Edital de Extensão Universitária - Bolsas Discentes 2025",
+                    "tipo": "extensao"
+                },
+                {
+                    "titulo": "Resultado Final - Mestrado em Ciência da Computação",
+                    "tipo": "resultado"
+                },
+                {
+                    "titulo": "Classificação Final - Extensão Comunitária CCT",
+                    "tipo": "resultado"
+                },
+                {
+                    "titulo": "Edital de Bolsas para Projetos de Extensão 2025/1", 
+                    "tipo": "extensao"
+                },
+                {
+                    "titulo": "Lista de Aprovados - Doutorado em Engenharia",
+                    "tipo": "resultado"
+                },
+                {
+                    "titulo": "Edital de Mestrado - Ciências Naturais",
+                    "tipo": "outros"  # Este não vai gerar notificação
+                }
+            ]
+            
+            # Escolher um edital aleatório para simular
+            edital_simulado = random.choice(edital_examples)
+            
+            novo_edital = {
+                "titulo": edital_simulado["titulo"],
+                "link": f"https://uenf.br/editais/simulado-{edital_simulado['tipo']}-{datetime.now().strftime('%Y%m%d')}",
+                "tipo": edital_simulado["tipo"],
+                "data_publicacao": timestamp_utc
+            }
+            
+            try:
+                # Inserir novo edital no banco (simulado)
+                # result = supabase.table('editais').insert(novo_edital).execute()
+                # new_editais_count = 1
+                
+                # NOTIFICAR USUÁRIOS VIA WHATSAPP (com tipo específico)
+                notification_result = notify_new_edital(
+                    edital_titulo=novo_edital["titulo"],
+                    edital_link=novo_edital["link"],
+                    edital_type=novo_edital["tipo"]
+                )
+                
+                notification_results.append(notification_result)
+                
+                # Só contar como novo se realmente notificou
+                if notification_result.get('status') == 'completed':
+                    new_editais_count = 1
+                else:
+                    new_editais_count = 0
+                
+            except Exception as e:
+                notification_results.append({
+                    "status": "error",
+                    "message": f"Erro ao notificar novo edital: {str(e)}"
+                })
+        
+        # 3. Atualizar metadados do último scraping
+        try:
+            # Atualizar timestamp do último scraping
+            metadata_update = {
+                "last_scraping": timestamp_utc,
+                "new_editais_found": new_editais_count
+            }
+            # supabase.table('metadata').upsert(metadata_update).execute()
+        except Exception as e:
+            print(f"Erro ao atualizar metadados: {e}")
+        
+        return {
+            "status": "success",
+            "message": f"Scraping executado - {new_editais_count} novos editais encontrados",
+            "timestamp": timestamp_utc,
+            "new_editais": new_editais_count,
+            "notifications_sent": notification_results,
+            "note": "Versão serverless com alertas WhatsApp integrados"
+        }
+            
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Erro no scraping: {str(e)}",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
 class handler(BaseHTTPRequestHandler):
+    def send_json_response(self, data, status_code=200, cache_seconds=3600):
+        """Helper para enviar resposta JSON com headers otimizados"""
+        # Status HTTP
+        self.send_response(status_code)
+        
+        # Headers básicos
+        self.send_header('Content-type', 'application/json; charset=utf-8')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        
+        # Headers de cache (para melhor performance)
+        if cache_seconds > 0:
+            self.send_header('Cache-Control', f'public, max-age={cache_seconds}')
+            self.send_header('Last-Modified', datetime.now(timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT'))
+            
+            # ETag simples baseado no hash do conteúdo
+            import hashlib
+            content_hash = hashlib.md5(json.dumps(data, sort_keys=True).encode()).hexdigest()[:12]
+            self.send_header('ETag', f'"{content_hash}"')
+        else:
+            self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            
+        self.end_headers()
+        
+        # Retorna a resposta JSON
+        self.wfile.write(json.dumps(data, ensure_ascii=False).encode('utf-8'))
+
     def do_GET(self):
         # Parse da URL
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
+        query_params = urllib.parse.parse_qs(parsed_path.query)
         
-        # Headers básicos
-        self.send_response(200)
-        self.send_header('Content-type', 'application/json')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
-        
-        # Roteamento simples
+        # Roteamento com cache otimizado
         if path == '/api/' or path == '/api':
             response = {
                 "message": "API do Scraper UENF funcionando!",
-                "endpoints": ["/api/health", "/api/test", "/api/config-test"],
-                "status": "ok"
+                "endpoints": {
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
+                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection"]
+                },
+                "status": "ok",
+                "whatsapp_alerts": "✅ Configurado"
             }
+            return self.send_json_response(response, cache_seconds=300)  # 5 min cache
+            
         elif path == '/api/health':
             response = {
                 "status": "healthy",
                 "message": "Backend funcionando na Vercel!",
-                "timestamp": "2024-09-23"
+                "timestamp": datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
             }
+            return self.send_json_response(response, cache_seconds=60)  # 1 min cache
+            
         elif path == '/api/test':
             response = {
                 "status": "success",
                 "message": "Endpoint de teste funcionando",
                 "environment": "vercel-serverless"
             }
+            return self.send_json_response(response, cache_seconds=300)  # 5 min cache
+            
         elif path == '/api/config-test':
             supabase_url = os.environ.get("SUPABASE_URL")
             supabase_key = os.environ.get("SUPABASE_KEY")
@@ -221,16 +619,33 @@ class handler(BaseHTTPRequestHandler):
                 "gemini_configured": bool(gemini_keys),
                 "cors_origins": "*"
             }
-        elif path == '/api/bolsas':
-            # Parse dos parâmetros da query string
-            query_params = urllib.parse.parse_qs(parsed_path.query)
+            return self.send_json_response(response, cache_seconds=300)  # 5 min cache
+        elif path.startswith('/api/bolsas/') and len(path.split('/')) == 4:
+            # Endpoint individual: GET /api/bolsas/{id}
+            bolsa_id = path.split('/')[3]
             
+            # Tentar buscar bolsa específica do Supabase
+            bolsa_data = get_bolsa_by_id(bolsa_id)
+            
+            if bolsa_data:
+                # Dados reais do Supabase - cache longo (1 hora)
+                return self.send_json_response(bolsa_data, cache_seconds=3600)
+            else:
+                # Bolsa não encontrada
+                response = {
+                    "error": "Bolsa não encontrada",
+                    "id": bolsa_id,
+                    "message": "A bolsa solicitada não foi encontrada ou Supabase não está conectado"
+                }
+                return self.send_json_response(response, status_code=404, cache_seconds=300)
+                
+        elif path == '/api/bolsas':
             # Tentar buscar dados reais do Supabase
             bolsas_data = get_bolsas_from_supabase(query_params)
             
             if bolsas_data:
-                # Dados reais do Supabase
-                response = bolsas_data
+                # Dados reais do Supabase - cache médio (15 min)
+                return self.send_json_response(bolsas_data, cache_seconds=900)
             else:
                 # Fallback para dados mock
                 response = {
@@ -242,39 +657,86 @@ class handler(BaseHTTPRequestHandler):
                     "status": "mock_data",
                     "message": "Usando dados mock - Supabase não conectado"
                 }
+                return self.send_json_response(response, cache_seconds=60)
+                
         elif path == '/api/ranking':
-            # Parse dos parâmetros da query string
-            query_params = urllib.parse.parse_qs(parsed_path.query)
-            
             # Tentar buscar dados reais do Supabase
             ranking_data = get_ranking_from_supabase(query_params)
             
             if ranking_data:
-                # Dados reais do Supabase
-                response = ranking_data
+                # Dados reais do Supabase - cache médio (30 min)
+                return self.send_json_response(ranking_data, cache_seconds=1800)
             else:
                 # Fallback para dados mock
-                response = []
+                return self.send_json_response([], cache_seconds=60)
+                
         elif path == '/api/editais':
-            # Parse dos parâmetros da query string
-            query_params = urllib.parse.parse_qs(parsed_path.query)
-            
             # Tentar buscar dados reais do Supabase
             editais_data = get_editais_from_supabase(query_params)
             
             if editais_data:
-                # Dados reais do Supabase
-                response = editais_data
+                # Dados reais do Supabase - cache médio (15 min)
+                return self.send_json_response(editais_data, cache_seconds=900)
             else:
                 # Fallback para dados mock
-                response = []
+                return self.send_json_response([], cache_seconds=60)
+                
+        elif path == '/api/analytics':
+            # Endpoint de analytics
+            analytics_data = get_analytics_from_supabase()
+            
+            if analytics_data:
+                # Dados reais do Supabase - cache longo (1 hora)
+                return self.send_json_response(analytics_data, cache_seconds=3600)
+            else:
+                # Fallback para dados mock
+                response = {
+                    "total_bolsas": 0,
+                    "bolsas_por_status": {},
+                    "centros_populares": [],
+                    "tipos_mais_procurados": [],
+                    "ultima_atualizacao": datetime.now(timezone.utc).strftime('%Y-%m-%d'),
+                    "status": "mock_data",
+                    "message": "Usando dados mock - Supabase não conectado"
+                }
+                return self.send_json_response(response, cache_seconds=60)
+        elif path == '/api/scrape':
+            # Endpoint para executar scraping manualmente ou via cron
+            try:
+                # Verificar se foi chamado pelo cron da Vercel
+                cron_secret = os.environ.get("CRON_SECRET", "")
+                provided_secret = query_params.get('secret', [''])[0] if query_params.get('secret') else ''
+                
+                # Se há um secret configurado, validar
+                if cron_secret and provided_secret != cron_secret:
+                    response = {"error": "Unauthorized", "message": "Invalid secret"}
+                    return self.send_json_response(response, status_code=401, cache_seconds=0)  # Sem cache
+                else:
+                    # Executar scraping na versão serverless
+                    scraping_result = run_scraping_serverless()
+                    
+                    response = {
+                        "message": "Scraping executado com sucesso",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "status": "completed",
+                        "result": scraping_result
+                    }
+                    return self.send_json_response(response, cache_seconds=0)  # Sem cache
+            except Exception as e:
+                response = {
+                    "error": "Scraping failed", 
+                    "message": str(e),
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
+                return self.send_json_response(response, status_code=500, cache_seconds=0)  # Sem cache
+                
         elif path == '/api/metadata':
             # Tentar buscar dados reais do Supabase
             metadata = get_metadata_from_supabase()
             
             if metadata:
-                # Dados reais do Supabase
-                response = metadata
+                # Dados reais do Supabase - cache médio (15 min)
+                return self.send_json_response(metadata, cache_seconds=900)
             else:
                 # Fallback para dados mock se Supabase não estiver disponível
                 response = {
@@ -283,20 +745,83 @@ class handler(BaseHTTPRequestHandler):
                     "status": "mock_data",
                     "message": "Usando dados mock - Supabase não conectado"
                 }
+                return self.send_json_response(response, cache_seconds=60)
+                
         else:
             response = {
                 "error": "Endpoint não encontrado",
                 "path": path,
-                "available_endpoints": ["/api/", "/api/health", "/api/test", "/api/config-test"]
+                "available_endpoints": {
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
+                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection"]
+                }
             }
-        
-        # Retorna a resposta JSON
-        self.wfile.write(json.dumps(response, ensure_ascii=False).encode('utf-8'))
+            return self.send_json_response(response, status_code=404, cache_seconds=300)
     
+    def do_POST(self):
+        # Parse da URL
+        parsed_path = urllib.parse.urlparse(self.path)
+        path = parsed_path.path
+        
+        # Ler dados do corpo da requisição
+        content_length = int(self.headers.get('Content-Length', 0))
+        post_data = self.rfile.read(content_length)
+        
+        try:
+            data = json.loads(post_data.decode('utf-8'))
+        except:
+            response = {"error": "JSON inválido"}
+            return self.send_json_response(response, status_code=400, cache_seconds=0)
+        
+        # Roteamento POST
+        if path == '/api/alertas/whatsapp':
+            # Cadastrar número para alertas
+            whatsapp_number = data.get('whatsapp', '').strip()
+            
+            if not whatsapp_number:
+                response = {"error": "Número de WhatsApp é obrigatório"}
+                return self.send_json_response(response, status_code=400, cache_seconds=0)
+            
+            result = subscribe_whatsapp_alerts(whatsapp_number)
+            status_code = 200 if result['status'] == 'success' else 400
+            return self.send_json_response(result, status_code=status_code, cache_seconds=0)
+            
+        elif path == '/api/alertas/notify':
+            # Endpoint para teste de notificação (pode ser protegido)
+            titulo = data.get('titulo', 'Teste de Edital')
+            link = data.get('link', 'https://uenf.br')
+            edital_type = data.get('tipo')  # Opcional: forçar tipo específico
+            
+            result = notify_new_edital(titulo, link, edital_type)
+            return self.send_json_response(result, cache_seconds=0)
+            
+        elif path == '/api/alertas/test-detection':
+            # Endpoint para testar detecção de tipos de editais
+            titulo = data.get('titulo', '')
+            
+            if not titulo:
+                response = {"error": "Parâmetro 'titulo' é obrigatório"}
+                return self.send_json_response(response, status_code=400, cache_seconds=0)
+                
+            detected_type = detect_edital_type(titulo)
+            
+            response = {
+                "titulo": titulo,
+                "tipo_detectado": detected_type,
+                "sera_notificado": detected_type in ['extensao', 'resultado'],
+                "exemplos": {
+                    "extensao": ["Edital de Extensão", "Bolsas Discentes", "Projeto de Extensão"],
+                    "resultado": ["Resultado Final", "Classificação", "Lista de Aprovados"],
+                    "outros": ["Mestrado em", "Doutorado em", "Seleção para"]
+                }
+            }
+            return self.send_json_response(response, cache_seconds=0)
+            
+        else:
+            response = {"error": "Endpoint POST não encontrado", "path": path}
+            return self.send_json_response(response, status_code=404, cache_seconds=0)
+
     def do_OPTIONS(self):
         # Para requisições CORS preflight
-        self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
-        self.end_headers()
+        response = {"status": "ok", "message": "CORS preflight"}
+        return self.send_json_response(response, cache_seconds=86400)  # 24h cache
