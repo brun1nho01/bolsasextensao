@@ -14,13 +14,6 @@
     {
       "src": "/api/(.*)",
       "dest": "backend/api.py"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
     }
   ],
   "crons": [
