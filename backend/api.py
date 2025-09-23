@@ -9,9 +9,9 @@ import uuid
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-from .models import BolsaComProjeto, Projeto, Edital, BolsasResponse
-from .database import SupabaseManager
-from .tasks import run_scraping_task
+from models import BolsaComProjeto, Projeto, Edital, BolsasResponse
+from database import SupabaseManager
+from tasks import run_scraping_task
 
 app = FastAPI(
     title="UENF Scraper API",

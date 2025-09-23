@@ -1,8 +1,8 @@
 import os
 from dotenv import load_dotenv
-from .scraper import UenfScraper
-from .parser import UenfParser
-from .database import SupabaseManager
+from scraper import UenfScraper
+from parser import UenfParser
+from database import SupabaseManager
 import sys
 from datetime import datetime, timezone
 

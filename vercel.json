@@ -1,32 +1,19 @@
 {
-  "version": 2,
-  "builds": [
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "functions": {
+    "backend/api.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "rewrites": [
     {
-      "src": "backend/api.py",
-      "use": "@vercel/python"
+      "source": "/api/(.*)",
+      "destination": "/backend/api.py"
     },
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "backend/api.py"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/scrape/start",
-      "schedule": "0 4 * * *"
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
