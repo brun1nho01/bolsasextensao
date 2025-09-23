@@ -124,6 +124,60 @@ def get_bolsas_from_supabase(params):
         print(f"Erro ao buscar bolsas: {e}")
         return None
 
+def get_ranking_from_supabase(params):
+    """Busca ranking das bolsas mais vistas do Supabase"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        # Parâmetro de limite (padrão 10, máximo 50)
+        limit = int(params.get('limit', ['10'])[0])
+        limit = min(limit, 50)  # Máximo 50 bolsas no ranking
+        
+        # Query para buscar as bolsas mais vistas
+        query = supabase.table('bolsas_view').select('*').order('view_count', desc=True).limit(limit)
+        
+        response = query.execute()
+        
+        if response.data is not None:
+            return response.data
+        
+        return None
+        
+    except Exception as e:
+        print(f"Erro ao buscar ranking: {e}")
+        return None
+
+def get_editais_from_supabase(params):
+    """Busca editais do Supabase com paginação"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        # Parâmetros de paginação
+        page = int(params.get('page', ['1'])[0])
+        page_size = int(params.get('page_size', ['10'])[0])
+        page_size = min(page_size, 100)  # Limita a 100
+        offset = (page - 1) * page_size
+        
+        # Query para buscar editais ordenados por data de publicação
+        query = supabase.table('editais').select(
+            'id, titulo, link, data_fim_inscricao, created_at, data_publicacao'
+        ).order('data_publicacao', desc=True).range(offset, offset + page_size - 1)
+        
+        response = query.execute()
+        
+        if response.data is not None:
+            return response.data
+        
+        return None
+        
+    except Exception as e:
+        print(f"Erro ao buscar editais: {e}")
+        return None
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         # Parse da URL
@@ -189,17 +243,31 @@ class handler(BaseHTTPRequestHandler):
                     "message": "Usando dados mock - Supabase não conectado"
                 }
         elif path == '/api/ranking':
-            response = {
-                "message": "Endpoint /api/ranking em desenvolvimento", 
-                "status": "coming_soon",
-                "ranking": []
-            }
+            # Parse dos parâmetros da query string
+            query_params = urllib.parse.parse_qs(parsed_path.query)
+            
+            # Tentar buscar dados reais do Supabase
+            ranking_data = get_ranking_from_supabase(query_params)
+            
+            if ranking_data:
+                # Dados reais do Supabase
+                response = ranking_data
+            else:
+                # Fallback para dados mock
+                response = []
         elif path == '/api/editais':
-            response = {
-                "message": "Endpoint /api/editais em desenvolvimento",
-                "status": "coming_soon", 
-                "editais": []
-            }
+            # Parse dos parâmetros da query string
+            query_params = urllib.parse.parse_qs(parsed_path.query)
+            
+            # Tentar buscar dados reais do Supabase
+            editais_data = get_editais_from_supabase(query_params)
+            
+            if editais_data:
+                # Dados reais do Supabase
+                response = editais_data
+            else:
+                # Fallback para dados mock
+                response = []
         elif path == '/api/metadata':
             # Tentar buscar dados reais do Supabase
             metadata = get_metadata_from_supabase()
