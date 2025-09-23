@@ -1,17 +1,33 @@
 import sys
 import os
-from fastapi import FastAPI, Query, Depends, HTTPException, BackgroundTasks, Header
-from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional
-import uuid
+from pathlib import Path
 
-# Adiciona o diretório raiz ao Python path para imports
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Configuração robusta de paths para Vercel
+current_dir = Path(__file__).parent
+root_dir = current_dir.parent
+backend_dir = root_dir / "backend"
 
-# Import dos módulos do backend
-from backend.models import BolsaComProjeto, Projeto, Edital, BolsasResponse
-from backend.database import SupabaseManager
-from backend.tasks import run_scraping_task
+# Adiciona diretórios ao Python path
+for path in [str(root_dir), str(backend_dir)]:
+    if path not in sys.path:
+        sys.path.insert(0, path)
+
+try:
+    from fastapi import FastAPI, Query, Depends, HTTPException, BackgroundTasks, Header
+    from fastapi.middleware.cors import CORSMiddleware
+    from typing import List, Optional
+    import uuid
+    
+    # Import dos módulos do backend
+    from models import BolsaComProjeto, Projeto, Edital, BolsasResponse
+    from database import SupabaseManager
+    from tasks import run_scraping_task
+except ImportError as e:
+    print(f"Erro de importação: {e}")
+    # Fallback para desenvolvimento local
+    from backend.models import BolsaComProjeto, Projeto, Edital, BolsasResponse
+    from backend.database import SupabaseManager
+    from backend.tasks import run_scraping_task
 
 app = FastAPI(
     title="UENF Scraper API",
@@ -170,3 +186,12 @@ def start_scraper_endpoint(
     print(">>> Endpoint de scraping acionado. Adicionando tarefa em segundo plano...")
     background_tasks.add_task(run_scraping_task)
     return {"message": "Processo de scraping iniciado em segundo plano."}
+
+# Exportação para Vercel Serverless Functions
+# A Vercel automaticamente detecta e usa a variável 'app'
+handler = app
+
+# Para desenvolvimento local
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
