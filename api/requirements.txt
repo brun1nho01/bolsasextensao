@@ -1,1 +1,2 @@
-# Sem dependências externas - usando apenas bibliotecas padrão do Python
+# Dependências mínimas para Supabase
+supabase==2.18.1

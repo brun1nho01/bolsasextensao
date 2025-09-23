@@ -3,6 +3,48 @@ import json
 import urllib.parse
 import os
 
+# Importar Supabase apenas se disponível (para não quebrar outros endpoints)
+try:
+    from supabase import create_client
+    SUPABASE_AVAILABLE = True
+except ImportError:
+    SUPABASE_AVAILABLE = False
+    print("Supabase não disponível - usando mocks")
+
+def get_supabase_client():
+    """Conecta ao Supabase se as variáveis estiverem configuradas"""
+    if not SUPABASE_AVAILABLE:
+        return None
+    
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    
+    if not supabase_url or not supabase_key:
+        return None
+    
+    try:
+        return create_client(supabase_url, supabase_key)
+    except Exception as e:
+        print(f"Erro ao conectar Supabase: {e}")
+        return None
+
+def get_metadata_from_supabase():
+    """Busca metadados do Supabase"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        response = supabase.table('metadata').select('key, value').execute()
+        if response.data:
+            # Transforma lista em dicionário
+            metadata = {item['key']: item['value'] for item in response.data}
+            return metadata
+        return None
+    except Exception as e:
+        print(f"Erro ao buscar metadados: {e}")
+        return None
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         # Parse da URL
@@ -65,12 +107,20 @@ class handler(BaseHTTPRequestHandler):
                 "editais": []
             }
         elif path == '/api/metadata':
-            response = {
-                "message": "Endpoint /api/metadata em desenvolvimento",
-                "status": "coming_soon",
-                "last_data_update": "2024-09-23T15:00:00Z",
-                "minimum_frontend_version": "1.0.0"
-            }
+            # Tentar buscar dados reais do Supabase
+            metadata = get_metadata_from_supabase()
+            
+            if metadata:
+                # Dados reais do Supabase
+                response = metadata
+            else:
+                # Fallback para dados mock se Supabase não estiver disponível
+                response = {
+                    "last_data_update": "2024-09-23T15:00:00Z",
+                    "minimum_frontend_version": "1.0.0",
+                    "status": "mock_data",
+                    "message": "Usando dados mock - Supabase não conectado"
+                }
         else:
             response = {
                 "error": "Endpoint não encontrado",
