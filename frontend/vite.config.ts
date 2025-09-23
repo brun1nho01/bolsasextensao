@@ -11,6 +11,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    outDir: "dist",
+  },
   // Expõe a versão do package.json para o código do frontend
   define: {
     "import.meta.env.PACKAGE_VERSION": JSON.stringify(
