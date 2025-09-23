@@ -117,7 +117,6 @@ export function AdvancedFilters({
                   <SelectItem value="all">Todos os status</SelectItem>
                   <SelectItem value="disponivel">Disponível</SelectItem>
                   <SelectItem value="aberta">Aberta</SelectItem>
-                  <SelectItem value="aguardando">Aguardando</SelectItem>
                   <SelectItem value="preenchida">Preenchida</SelectItem>
                 </SelectContent>
               </Select>
