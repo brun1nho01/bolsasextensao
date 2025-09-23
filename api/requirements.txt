@@ -1,2 +1,1 @@
-# Dependências mínimas para teste inicial
-fastapi==0.116.1
+# Sem dependências externas - usando apenas bibliotecas padrão do Python
