@@ -5,7 +5,7 @@
   "devCommand": "cd frontend && npm run dev",
   "functions": {
     "backend/api.py": {
-      "runtime": "python3.9"
+      "runtime": "@vercel/python"
     }
   },
   "rewrites": [
