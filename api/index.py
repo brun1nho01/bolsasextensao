@@ -45,6 +45,85 @@ def get_metadata_from_supabase():
         print(f"Erro ao buscar metadados: {e}")
         return None
 
+def get_bolsas_from_supabase(params):
+    """Busca bolsas do Supabase com filtros e paginação"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return None
+    
+    try:
+        # Parâmetros de paginação
+        page = int(params.get('page', ['1'])[0])
+        page_size = int(params.get('page_size', ['10'])[0])
+        page_size = min(page_size, 100)  # Limita a 100
+        offset = (page - 1) * page_size
+        
+        # Query base com contagem total
+        query = supabase.table('bolsas_view').select('*', count='exact')
+        
+        # Filtros
+        status = params.get('status', [None])[0]
+        if status and status != 'all':
+            query = query.eq('status', status)
+            
+        centro = params.get('centro', [None])[0]
+        if centro and centro != 'all':
+            query = query.eq('centro', centro)
+            
+        tipo = params.get('tipo', [None])[0]
+        if tipo and tipo != 'all':
+            if tipo == 'extensao':
+                query = query.or_('tipo.ilike.%Extensão%,tipo.ilike.%Discente%')
+            elif tipo == 'UA Superior':
+                query = query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Superior%')
+            elif tipo == 'UA Médio':
+                # Filtra por UA E Médio
+                query = query.filter('and', 'or(tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%),or(tipo.ilike.%Médio%,tipo.ilike.%Nível Médio%)')
+            elif tipo == 'UA Fundamental':
+                query = query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Fundamental%')
+        
+        # Busca textual
+        q = params.get('q', [None])[0]
+        if q:
+            # Busca simples usando ilike (não temos FTS no handler simples)
+            search_term = f"%{q}%"
+            query = query.or_(f'nome_projeto.ilike.{search_term},orientador.ilike.{search_term}')
+            
+        # Ordenação
+        sort = params.get('sort', ['created_at'])[0]
+        order = params.get('order', ['desc'])[0]
+        
+        # Ordenação primária por status
+        query = query.order('status_order', desc=False)
+        
+        # Ordenação secundária
+        if sort and order:
+            is_desc = order.lower() == 'desc'
+            query = query.order(sort, desc=is_desc)
+        
+        # Paginação
+        query = query.range(offset, offset + page_size - 1)
+        
+        response = query.execute()
+        
+        if response.data is not None:
+            total_count = response.count if response.count is not None else 0
+            total_pages = (total_count + page_size - 1) // page_size
+            
+            return {
+                "bolsas": response.data,
+                "total": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages
+            }
+        
+        return None
+        
+    except Exception as e:
+        print(f"Erro ao buscar bolsas: {e}")
+        return None
+
 class handler(BaseHTTPRequestHandler):
     def do_GET(self):
         # Parse da URL
@@ -89,11 +168,26 @@ class handler(BaseHTTPRequestHandler):
                 "cors_origins": "*"
             }
         elif path == '/api/bolsas':
-            response = {
-                "message": "Endpoint /api/bolsas em desenvolvimento",
-                "status": "coming_soon",
-                "bolsas": []
-            }
+            # Parse dos parâmetros da query string
+            query_params = urllib.parse.parse_qs(parsed_path.query)
+            
+            # Tentar buscar dados reais do Supabase
+            bolsas_data = get_bolsas_from_supabase(query_params)
+            
+            if bolsas_data:
+                # Dados reais do Supabase
+                response = bolsas_data
+            else:
+                # Fallback para dados mock
+                response = {
+                    "bolsas": [],
+                    "total": 0,
+                    "page": 1,
+                    "page_size": 10,
+                    "total_pages": 0,
+                    "status": "mock_data",
+                    "message": "Usando dados mock - Supabase não conectado"
+                }
         elif path == '/api/ranking':
             response = {
                 "message": "Endpoint /api/ranking em desenvolvimento", 
