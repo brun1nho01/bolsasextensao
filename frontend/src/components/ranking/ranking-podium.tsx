@@ -36,7 +36,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
   useEffect(() => {
     if (isMobile && scrollContainerRef.current && topBolsas.length > 0) {
       const container = scrollContainerRef.current;
-      
+
       const centerOnFirstPlace = () => {
         // Encontrar o card do 1º lugar (que está no índice 1 da ordem do pódio)
         const firstPlaceCard = container.children[1] as HTMLElement;
@@ -45,30 +45,31 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
           const cardLeft = firstPlaceCard.offsetLeft;
           const cardWidth = firstPlaceCard.offsetWidth;
           const containerWidth = container.clientWidth;
-          const scrollLeft = cardLeft - (containerWidth / 2) + (cardWidth / 2);
-          
+          const scrollLeft = cardLeft - containerWidth / 2 + cardWidth / 2;
+
           container.scrollLeft = Math.max(0, scrollLeft);
         } else {
           // Fallback para centralização simples
-          const scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+          const scrollLeft =
+            (container.scrollWidth - container.clientWidth) / 2;
           container.scrollLeft = scrollLeft;
         }
       };
-      
+
       // Tentar centralizar com delays diferentes para garantir que funcione
       setTimeout(centerOnFirstPlace, 50);
       setTimeout(centerOnFirstPlace, 150);
       setTimeout(centerOnFirstPlace, 300);
-      
+
       // Também centralizar após imagens carregarem
-      const images = container.querySelectorAll('img');
+      const images = container.querySelectorAll("img");
       if (images.length > 0) {
         let loadedImages = 0;
-        images.forEach(img => {
+        images.forEach((img) => {
           if (img.complete) {
             loadedImages++;
           } else {
-            img.addEventListener('load', () => {
+            img.addEventListener("load", () => {
               loadedImages++;
               if (loadedImages === images.length) {
                 setTimeout(centerOnFirstPlace, 100);
@@ -108,101 +109,107 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
               <span>Deslize para ver todos</span>
               <div className="flex gap-0.5">
                 <div className="w-1 h-1 bg-current rounded-full animate-pulse"></div>
-                <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
-                <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+                <div
+                  className="w-1 h-1 bg-current rounded-full animate-pulse"
+                  style={{ animationDelay: "0.2s" }}
+                ></div>
+                <div
+                  className="w-1 h-1 bg-current rounded-full animate-pulse"
+                  style={{ animationDelay: "0.4s" }}
+                ></div>
               </div>
             </div>
           </div>
         )}
-        
-        <div 
+
+        <div
           ref={scrollContainerRef}
           className={`flex items-end gap-2 sm:gap-4 mb-8 pb-4 px-4 scroll-smooth ${
-            isMobile 
-              ? 'justify-start overflow-x-auto' 
-              : 'justify-center overflow-x-visible'
+            isMobile
+              ? "justify-start overflow-x-auto"
+              : "justify-center overflow-x-visible"
           }`}
           style={{
-            scrollSnapType: isMobile ? 'x mandatory' : 'none',
-            WebkitOverflowScrolling: 'touch',
+            scrollSnapType: isMobile ? "x mandatory" : "none",
+            WebkitOverflowScrolling: "touch",
           }}
         >
-        {/* Rearrange for podium effect: 2nd, 1st, 3rd */}
-        {[top3[1], top3[0], top3[2]].filter(Boolean).map((bolsa, index) => {
-          const actualIndex = index === 0 ? 1 : index === 1 ? 0 : 2;
-          const Icon = podiumIcons[actualIndex];
-          const colorClass = podiumColors[actualIndex];
-          const cardHeightClass = podiumCardHeights[actualIndex];
-          const position = actualIndex + 1;
+          {/* Rearrange for podium effect: 2nd, 1st, 3rd */}
+          {[top3[1], top3[0], top3[2]].filter(Boolean).map((bolsa, index) => {
+            const actualIndex = index === 0 ? 1 : index === 1 ? 0 : 2;
+            const Icon = podiumIcons[actualIndex];
+            const colorClass = podiumColors[actualIndex];
+            const cardHeightClass = podiumCardHeights[actualIndex];
+            const position = actualIndex + 1;
 
-          return (
-            <motion.div
-              key={bolsa.id}
-              initial={{ opacity: 0, y: 50, scale: 0.8 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              transition={{
-                delay: actualIndex * 0.2,
-                type: "spring",
-                damping: 20,
-                stiffness: 300,
-              }}
-              whileHover={{ scale: 1.05, y: -5 }}
-              className={`relative flex-shrink-0 ${
-                isMobile ? 'scroll-snap-align-center' : ''
-              }`}
-              style={{
-                scrollSnapAlign: isMobile ? 'center' : 'none',
-              }}
-              onClick={() => onBolsaClick(bolsa)}
-            >
-              <GlassCard
-                className={`w-full max-w-[260px] sm:max-w-[280px] md:w-80 ${cardHeightClass} relative flex flex-col cursor-pointer group`}
-                hoverable={true}
+            return (
+              <motion.div
+                key={bolsa.id}
+                initial={{ opacity: 0, y: 50, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{
+                  delay: actualIndex * 0.2,
+                  type: "spring",
+                  damping: 20,
+                  stiffness: 300,
+                }}
+                whileHover={{ scale: 1.05, y: -5 }}
+                className={`relative flex-shrink-0 ${
+                  isMobile ? "scroll-snap-align-center" : ""
+                }`}
+                style={{
+                  scrollSnapAlign: isMobile ? "center" : "none",
+                }}
+                onClick={() => onBolsaClick(bolsa)}
               >
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
-                  <Badge
-                    className={`${
-                      position === 1
-                        ? "badge-warning"
-                        : position === 2
-                        ? "badge-info"
-                        : "badge-success"
-                    } px-3 py-1 shadow-lg`}
-                  >
-                    <Icon className="w-3 h-3 mr-1" />
-                    {position}º Lugar
-                  </Badge>
-                </div>
-
-                <GlassCardHeader
-                  title={formatProjectTitle(bolsa.nome_projeto)}
-                  description={formatPersonName(bolsa.orientador)}
-                  className="pt-6"
-                  titleClassName="line-clamp-3"
-                />
-                <GlassCardContent className="flex flex-col flex-grow p-6 pt-3">
-                  <div className="mt-auto space-y-3">
-                    <div className="flex items-center justify-between">
-                      <StatusBadge status={bolsa.status} />
-                      <div className="flex items-center gap-1 text-lg font-bold text-primary">
-                        <Eye className="w-5 h-5" />
-                        {bolsa.view_count}
-                      </div>
-                    </div>
-                    <div className="text-sm text-muted-foreground truncate">
-                      {bolsa.tipo}
-                    </div>
-                    {bolsa.candidato_aprovado && (
-                      <div className="text-xs text-success font-medium truncate pt-2 border-t border-glass-border">
-                        ✓ {formatPersonName(bolsa.candidato_aprovado)}
-                      </div>
-                    )}
+                <GlassCard
+                  className={`w-full max-w-[260px] sm:max-w-[280px] md:w-80 ${cardHeightClass} relative flex flex-col cursor-pointer group`}
+                  hoverable={true}
+                >
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                    <Badge
+                      className={`${
+                        position === 1
+                          ? "badge-warning"
+                          : position === 2
+                          ? "badge-info"
+                          : "badge-success"
+                      } px-3 py-1 shadow-lg`}
+                    >
+                      <Icon className="w-3 h-3 mr-1" />
+                      {position}º Lugar
+                    </Badge>
                   </div>
-                </GlassCardContent>
-              </GlassCard>
-            </motion.div>
-          );
-        })}
+
+                  <GlassCardHeader
+                    title={formatProjectTitle(bolsa.nome_projeto)}
+                    description={formatPersonName(bolsa.orientador)}
+                    className="pt-6"
+                    titleClassName="line-clamp-3"
+                  />
+                  <GlassCardContent className="flex flex-col flex-grow p-6 pt-3">
+                    <div className="mt-auto space-y-3">
+                      <div className="flex items-center justify-between">
+                        <StatusBadge status={bolsa.status} />
+                        <div className="flex items-center gap-1 text-lg font-bold text-primary">
+                          <Eye className="w-5 h-5" />
+                          {bolsa.view_count}
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground truncate">
+                        {bolsa.tipo}
+                      </div>
+                      {bolsa.candidato_aprovado && (
+                        <div className="text-xs text-success font-medium truncate pt-2 border-t border-glass-border">
+                          ✓ {formatPersonName(bolsa.candidato_aprovado)}
+                        </div>
+                      )}
+                    </div>
+                  </GlassCardContent>
+                </GlassCard>
+              </motion.div>
+            );
+          })}
         </div>
       </div>
 
