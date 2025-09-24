@@ -34,10 +34,52 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
 
   // Centralizar o scroll no mobile após o render
   useEffect(() => {
-    if (isMobile && scrollContainerRef.current) {
+    if (isMobile && scrollContainerRef.current && topBolsas.length > 0) {
       const container = scrollContainerRef.current;
-      const scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
-      container.scrollLeft = scrollLeft;
+      
+      const centerOnFirstPlace = () => {
+        // Encontrar o card do 1º lugar (que está no índice 1 da ordem do pódio)
+        const firstPlaceCard = container.children[1] as HTMLElement;
+        if (firstPlaceCard) {
+          // Calcular a posição para centralizar o 1º lugar
+          const cardLeft = firstPlaceCard.offsetLeft;
+          const cardWidth = firstPlaceCard.offsetWidth;
+          const containerWidth = container.clientWidth;
+          const scrollLeft = cardLeft - (containerWidth / 2) + (cardWidth / 2);
+          
+          container.scrollLeft = Math.max(0, scrollLeft);
+        } else {
+          // Fallback para centralização simples
+          const scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+          container.scrollLeft = scrollLeft;
+        }
+      };
+      
+      // Tentar centralizar com delays diferentes para garantir que funcione
+      setTimeout(centerOnFirstPlace, 50);
+      setTimeout(centerOnFirstPlace, 150);
+      setTimeout(centerOnFirstPlace, 300);
+      
+      // Também centralizar após imagens carregarem
+      const images = container.querySelectorAll('img');
+      if (images.length > 0) {
+        let loadedImages = 0;
+        images.forEach(img => {
+          if (img.complete) {
+            loadedImages++;
+          } else {
+            img.addEventListener('load', () => {
+              loadedImages++;
+              if (loadedImages === images.length) {
+                setTimeout(centerOnFirstPlace, 100);
+              }
+            });
+          }
+        });
+        if (loadedImages === images.length) {
+          setTimeout(centerOnFirstPlace, 100);
+        }
+      }
     }
   }, [isMobile, topBolsas]);
 
@@ -59,10 +101,32 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
       </motion.div>
 
       {/* Podium */}
-      <div
-        ref={scrollContainerRef}
-        className="flex items-end justify-center gap-2 sm:gap-4 mb-8 overflow-x-auto pb-4 px-4 scroll-smooth"
-      >
+      <div className="relative">
+        {isMobile && (
+          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-10">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded-full">
+              <span>Deslize para ver todos</span>
+              <div className="flex gap-0.5">
+                <div className="w-1 h-1 bg-current rounded-full animate-pulse"></div>
+                <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-1 h-1 bg-current rounded-full animate-pulse" style={{animationDelay: '0.4s'}}></div>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        <div 
+          ref={scrollContainerRef}
+          className={`flex items-end gap-2 sm:gap-4 mb-8 pb-4 px-4 scroll-smooth ${
+            isMobile 
+              ? 'justify-start overflow-x-auto' 
+              : 'justify-center overflow-x-visible'
+          }`}
+          style={{
+            scrollSnapType: isMobile ? 'x mandatory' : 'none',
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
         {/* Rearrange for podium effect: 2nd, 1st, 3rd */}
         {[top3[1], top3[0], top3[2]].filter(Boolean).map((bolsa, index) => {
           const actualIndex = index === 0 ? 1 : index === 1 ? 0 : 2;
@@ -83,7 +147,12 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
                 stiffness: 300,
               }}
               whileHover={{ scale: 1.05, y: -5 }}
-              className="relative flex-shrink-0"
+              className={`relative flex-shrink-0 ${
+                isMobile ? 'scroll-snap-align-center' : ''
+              }`}
+              style={{
+                scrollSnapAlign: isMobile ? 'center' : 'none',
+              }}
               onClick={() => onBolsaClick(bolsa)}
             >
               <GlassCard
@@ -134,6 +203,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
             </motion.div>
           );
         })}
+        </div>
       </div>
 
       {/* Extended Ranking */}

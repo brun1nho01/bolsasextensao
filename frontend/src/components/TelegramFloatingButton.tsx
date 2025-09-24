@@ -99,16 +99,16 @@ export default function TelegramFloatingButton({
       {/* Botão Flutuante */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] bg-blue-500 hover:bg-blue-600 text-white p-3 sm:p-4 rounded-full shadow-lg transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-300"
+        className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[9999] bg-blue-500 hover:bg-blue-600 text-white rounded-full shadow-lg transition-all duration-200 hover:scale-110 focus:outline-none focus:ring-4 focus:ring-blue-300 flex items-center justify-center"
         title="Receber alertas no Telegram"
         aria-label="Cadastrar Telegram para alertas"
         style={{
           zIndex: 9999,
-          minWidth: "56px",
-          minHeight: "56px",
+          width: "56px",
+          height: "56px",
         }}
       >
-        <Send size={20} className="sm:w-6 sm:h-6" />
+        <Send size={20} />
       </button>
 
       {/* Modal/Popup */}
