@@ -322,8 +322,14 @@ def send_telegram_message(chat_id, message):
             import requests
             
             telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+            
+            # Preparar chat_id - se começar com @, tentar como username, senão como chat_id
+            final_chat_id = chat_id
+            if isinstance(chat_id, str) and chat_id.startswith('@'):
+                final_chat_id = chat_id[1:]  # Remove o @
+            
             payload = {
-                "chat_id": chat_id,
+                "chat_id": final_chat_id,
                 "text": message,
                 "parse_mode": "Markdown",
                 "disable_web_page_preview": True
@@ -345,6 +351,19 @@ def send_telegram_message(chat_id, message):
                         "message": f"Telegram API error: {result.get('description', 'Unknown error')}"
                     }
             else:
+                # Tentar com @ se falhou sem @
+                if isinstance(chat_id, str) and not chat_id.startswith('@') and chat_id.isdigit() == False:
+                    payload["chat_id"] = "@" + chat_id
+                    response_retry = requests.post(telegram_url, json=payload, timeout=10)
+                    if response_retry.status_code == 200:
+                        result_retry = response_retry.json()
+                        if result_retry.get('ok'):
+                            return {
+                                "status": "sent",
+                                "platform": "telegram",
+                                "message_id": result_retry['result']['message_id']
+                            }
+                
                 return {
                     "status": "error",
                     "message": f"HTTP {response.status_code}: {response.text}"

@@ -94,9 +94,43 @@ BotFather: Send me the new profile photo for the bot.
 
 ---
 
-## 🌐 **PASSO 3: CONFIGURAR NO VERCEL**
+## 🗄️ **PASSO 3: CRIAR TABELA NO SUPABASE**
 
-### **3.1 Adicionar Variável de Ambiente:**
+### **3.1 Acessar Supabase:**
+
+1. **Acesse:** [supabase.com](https://supabase.com)
+2. **Vá para:** Seu projeto UENF
+3. **Clique:** "Table Editor" (lado esquerdo)
+
+### **3.2 Criar Tabela `telegram_alerts`:**
+
+1. **Clique:** "Create a new table"
+2. **Nome:** `telegram_alerts`
+3. **Colunas:**
+
+| Nome          | Tipo          | Configuração                      |
+| ------------- | ------------- | --------------------------------- |
+| `id`          | `int8`        | ✅ Primary Key, ✅ Auto-increment |
+| `telegram_id` | `text`        | ✅ Unique, ❌ Not null            |
+| `status`      | `text`        | Default: `'ativo'`                |
+| `created_at`  | `timestamptz` | Default: `now()`                  |
+
+### **3.3 SQL Alternativo:**
+
+```sql
+CREATE TABLE telegram_alerts (
+  id BIGSERIAL PRIMARY KEY,
+  telegram_id TEXT UNIQUE NOT NULL,
+  status TEXT DEFAULT 'ativo' CHECK (status IN ('ativo', 'inativo')),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+## 🌐 **PASSO 4: CONFIGURAR NO VERCEL**
+
+### **4.1 Adicionar Variável de Ambiente:**
 
 1. **Acesse:** [vercel.com](https://vercel.com)
 2. **Vá para:** Seu projeto → Settings → Environment Variables
@@ -105,7 +139,7 @@ BotFather: Send me the new profile photo for the bot.
    - **Value:** `1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ1234567890`
    - **Environment:** Production + Preview + Development
 
-### **3.2 Fazer Deploy:**
+### **4.2 Fazer Deploy:**
 
 ```bash
 # Se você modificou código, faça commit e push
@@ -118,17 +152,21 @@ git push
 
 ---
 
-## 🧪 **PASSO 4: TESTAR O SISTEMA**
+## 🧪 **PASSO 5: TESTAR O SISTEMA**
 
-### **4.1 Testar Frontend:**
+### **5.1 Testar Frontend (PROCESSO COMPLETO):**
 
-1. **Abra:** https://seusite.vercel.app
-2. **Clique:** Botão azul flutuante (📱)
-3. **Digite:** Seu ID do Telegram (ex: `@joao123`)
-4. **Clique:** "Receber Alertas"
-5. **Deve aparecer:** "✅ Cadastrado com sucesso!"
+**⚠️ IMPORTANTE: Faça na ordem certa!**
 
-### **4.2 Testar API Diretamente:**
+1. **PRIMEIRO:** Procure seu bot no Telegram (`@seubot_bot`)
+2. **Clique "START"** e envie uma mensagem qualquer
+3. **DEPOIS:** Abra https://seusite.vercel.app
+4. **Clique:** Botão azul flutuante (📱)
+5. **Digite:** Seu ID do Telegram (ex: `@joao123`)
+6. **Clique:** "Receber Alertas"
+7. **Deve aparecer:** "✅ Cadastrado com sucesso!"
+
+### **5.2 Testar API Diretamente:**
 
 ```javascript
 // No console do browser (F12)
@@ -146,7 +184,7 @@ fetch("/api/alertas/telegram", {
   });
 ```
 
-### **4.3 Listar Usuários Cadastrados:**
+### **5.3 Listar Usuários Cadastrados:**
 
 ```javascript
 fetch("/api/alertas/listar", {
@@ -161,7 +199,7 @@ fetch("/api/alertas/listar", {
   });
 ```
 
-### **4.4 Testar Notificação:**
+### **5.4 Testar Notificação:**
 
 ```javascript
 fetch("/api/alertas/notify", {
@@ -180,6 +218,32 @@ fetch("/api/alertas/notify", {
       console.log("🎉 FUNCIONOU! Telegram enviado!");
     }
   });
+```
+
+---
+
+## 👥 **COMO ORIENTAR OS USUÁRIOS FINAIS:**
+
+### **📋 Instruções para seus usuários:**
+
+**"Para receber alertas da UENF, faça assim:"**
+
+1. **📱 PRIMEIRO:** Abra o Telegram e procure por `@seubot_bot`
+2. **▶️ Clique em "START"** (é obrigatório!)
+3. **💻 DEPOIS:** Vá no site https://seusite.vercel.app
+4. **🔵 Clique** no botão azul no canto inferior direito
+5. **✏️ Digite** seu nome de usuário do Telegram (ex: @joao123)
+6. **✅ Pronto!** Você receberá alertas automáticos
+
+**⚠️ Aviso importante:** Se você não fizer o passo 1 e 2 primeiro, os alertas NÃO chegarão!
+
+### **📄 Exemplo de aviso no seu site:**
+
+```html
+<div class="alert alert-info">
+  ⚠️ <strong>Antes de se cadastrar:</strong> Procure <code>@seubot_bot</code> no
+  Telegram e clique "START"
+</div>
 ```
 
 ---
@@ -263,15 +327,18 @@ _Para cancelar alertas, digite /stop_
 3. Copie o novo token
 4. Atualize no Vercel
 
-### **❌ "Chat not found"**
+### **❌ "Chat not found" - MAIS COMUM**
 
-**Causa:** Usuário nunca conversou com o bot  
-**Solução:**
+**Causa:** Usuário nunca conversou com o bot (regra do Telegram)  
+**Solução OBRIGATÓRIA:**
 
-1. **Usuário deve** iniciar conversa com o bot primeiro
-2. Procurar por `@seubot_bot` no Telegram
-3. Clicar "START"
-4. Só depois se cadastrar no site
+1. **ANTES de se cadastrar** no site, cada usuário deve:
+2. **Procurar o bot:** `@seubot_bot` no Telegram
+3. **Clicar "START"** ou enviar qualquer mensagem
+4. **SÓ DEPOIS** se cadastrar no site
+5. **Importante:** Sem este passo, o bot NÃO consegue enviar mensagens
+
+**⚠️ Este é o erro mais comum! Usuários DEVEM iniciar conversa primeiro.**
 
 ### **❌ Bot não responde**
 

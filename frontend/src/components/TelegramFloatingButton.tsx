@@ -61,8 +61,16 @@ export default function TelegramFloatingButton({
   };
 
   const formatTelegramId = (value: string) => {
-    // Remove caracteres não permitidos e normaliza
-    let formatted = value.replace(/[^a-zA-Z0-9_@]/g, "");
+    // Remove espaços
+    let formatted = value.trim();
+
+    // Se for só números, manter assim (chat_id)
+    if (/^\d+$/.test(formatted)) {
+      return formatted;
+    }
+
+    // Se não for números, tratar como username
+    formatted = formatted.replace(/[^a-zA-Z0-9_@]/g, "");
 
     // Se não começar com @, adicionar
     if (formatted && !formatted.startsWith("@")) {
@@ -153,19 +161,21 @@ export default function TelegramFloatingButton({
                     className="text-blue-500 flex-shrink-0 mt-0.5"
                     size={14}
                   />
-                  <div>
-                    <p className="text-xs text-blue-800 font-medium mb-1">
-                      Como encontrar seu ID:
-                    </p>
-                    <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                      <li>Abra o Telegram</li>
-                      <li>Vá em Configurações</li>
-                      <li>
-                        Seu nome de usuário aparece como{" "}
-                        <code>@seuusuario</code>
-                      </li>
-                    </ol>
-                  </div>
+                   <div>
+                     <p className="text-xs text-blue-800 font-medium mb-1">
+                       Como encontrar seu ID:
+                     </p>
+                     <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+                       <li>Abra o Telegram</li>
+                       <li>Vá em Configurações → Username</li>
+                       <li>
+                         Use <code>@seuusuario</code> ou números como <code>123456789</code>
+                       </li>
+                     </ol>
+                     <p className="text-xs text-blue-600 mt-1 font-medium">
+                       💡 Se der erro, use número ao invés de @username
+                     </p>
+                   </div>
                 </div>
               </div>
 
@@ -183,7 +193,7 @@ export default function TelegramFloatingButton({
                     id="telegram"
                     value={telegram}
                     onChange={handleTelegramChange}
-                    placeholder="@seuusuario"
+                     placeholder="@usuario ou 123456789"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 bg-white"
                     disabled={status === "loading"}
                     maxLength={33}
