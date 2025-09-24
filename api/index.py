@@ -440,21 +440,36 @@ def setup_telegram_webhook(webhook_url):
 def handle_telegram_webhook(update_data):
     """Processa mensagens recebidas via webhook do Telegram"""
     try:
+        print(f"🔄 PROCESSANDO WEBHOOK: {update_data}")
+        
         message = update_data.get('message', {})
         if not message:
-            return {"status": "ignored", "reason": "Não é uma mensagem"}
+            print("⚠️ UPDATE SEM MENSAGEM")
+            return {"status": "ignored", "reason": "Não é uma mensagem", "update_data": update_data}
         
         chat = message.get('chat', {})
         chat_id = chat.get('id')
         text = message.get('text', '').strip()
         
+        print(f"💬 MENSAGEM RECEBIDA: chat_id={chat_id}, text='{text}'")
+        
         if not chat_id or not text:
-            return {"status": "ignored", "reason": "Mensagem inválida"}
+            print(f"❌ DADOS INCOMPLETOS: chat_id={chat_id}, text='{text}'")
+            return {
+                "status": "ignored", 
+                "reason": "Mensagem inválida",
+                "chat_id": chat_id,
+                "text": text
+            }
         
         # Responder ao comando /start
         if text.lower() in ['/start', 'start', '/help', 'help']:
+            print(f"🚀 COMANDO START DETECTADO de {chat_id}")
+            
             username = message.get('from', {}).get('username', '')
             first_name = message.get('from', {}).get('first_name', 'Usuário')
+            
+            print(f"👤 USUÁRIO: {first_name} (@{username}) - Chat ID: {chat_id}")
             
             response_message = f"""🎓 <b>Olá {first_name}! Bem-vindo ao UENF Alertas!</b>
 
@@ -473,14 +488,18 @@ def handle_telegram_webhook(update_data):
 
 📝 Digite /stop para cancelar alertas."""
             
+            print(f"📤 ENVIANDO RESPOSTA PARA {chat_id}...")
             send_result = send_telegram_message(chat_id, response_message)
+            print(f"✅ RESULTADO ENVIO: {send_result}")
             
             return {
                 "status": "handled",
                 "command": text,
                 "chat_id": chat_id,
                 "username": username,
-                "response_sent": send_result.get('status') == 'sent'
+                "first_name": first_name,
+                "response_sent": send_result.get('status') == 'sent',
+                "send_result": send_result
             }
         
         # Responder ao comando /stop
@@ -1089,16 +1108,34 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/api/telegram/webhook':
             # Webhook do Telegram - recebe mensagens dos usuários
             try:
+                # Log para debug
+                print(f"📥 WEBHOOK RECEBIDO: {json.dumps(data, indent=2)}")
+                
                 # Verificar se tem dados do webhook
                 if not data:
-                    response = {"error": "Dados do webhook inválidos"}
+                    response = {"error": "Dados do webhook inválidos", "received_data": data}
+                    print(f"❌ WEBHOOK VAZIO: {response}")
                     return self.send_json_response(response, status_code=400, cache_seconds=0)
                 
                 result = handle_telegram_webhook(data)
+                print(f"📤 WEBHOOK RESULTADO: {json.dumps(result, indent=2)}")
+                
+                # Adicionar logs para debug na resposta
+                result["debug"] = {
+                    "received_data": data,
+                    "processed_at": datetime.now(timezone.utc).isoformat()
+                }
+                
                 return self.send_json_response(result, cache_seconds=0)
                 
             except Exception as e:
-                response = {"error": f"Erro ao processar webhook: {str(e)}"}
+                error_msg = f"Erro ao processar webhook: {str(e)}"
+                print(f"🚨 ERRO WEBHOOK: {error_msg}")
+                response = {
+                    "error": error_msg,
+                    "received_data": data,
+                    "traceback": str(e)
+                }
                 return self.send_json_response(response, status_code=500, cache_seconds=0)
         
         else:
