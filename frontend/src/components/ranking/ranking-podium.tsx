@@ -1,7 +1,9 @@
 import { motion } from "framer-motion";
 import { Trophy, Medal, Award, Eye, TrendingUp } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { Bolsa } from "@/types/api";
 import { formatPersonName, formatProjectTitle } from "@/lib/utils";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   GlassCard,
   GlassCardContent,
@@ -27,6 +29,17 @@ const podiumCardHeights = ["h-[22rem]", "h-[20rem]", "h-[18rem]"]; // 1º, 2º, 
 export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
   const top3 = topBolsas.slice(0, 3);
   const rest = topBolsas.slice(3);
+  const isMobile = useIsMobile();
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Centralizar o scroll no mobile após o render
+  useEffect(() => {
+    if (isMobile && scrollContainerRef.current) {
+      const container = scrollContainerRef.current;
+      const scrollLeft = (container.scrollWidth - container.clientWidth) / 2;
+      container.scrollLeft = scrollLeft;
+    }
+  }, [isMobile, topBolsas]);
 
   return (
     <div className="space-y-8">
@@ -46,7 +59,10 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
       </motion.div>
 
       {/* Podium */}
-      <div className="flex items-end justify-center gap-2 sm:gap-4 mb-8 overflow-x-auto pb-4 px-4">
+      <div
+        ref={scrollContainerRef}
+        className="flex items-end justify-center gap-2 sm:gap-4 mb-8 overflow-x-auto pb-4 px-4 scroll-smooth"
+      >
         {/* Rearrange for podium effect: 2nd, 1st, 3rd */}
         {[top3[1], top3[0], top3[2]].filter(Boolean).map((bolsa, index) => {
           const actualIndex = index === 0 ? 1 : index === 1 ? 0 : 2;
