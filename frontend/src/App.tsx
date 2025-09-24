@@ -11,7 +11,7 @@ import { fetchMetadata } from "@/hooks/useApi";
 import { toast } from "sonner";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
-import WhatsAppFloatingButton from "./components/WhatsAppFloatingButton";
+import TelegramFloatingButton from "./components/TelegramFloatingButton";
 
 const CACHE_VERSION_KEY = "uenf-bolsas-cache-version";
 const APP_VERSION = import.meta.env.PACKAGE_VERSION || "0.0.0";
@@ -101,8 +101,8 @@ const App = () => (
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
-      {/* Botão flutuante WhatsApp - aparece em todas as páginas */}
-      <WhatsAppFloatingButton />
+      {/* Botão flutuante Telegram - aparece em todas as páginas */}
+      <TelegramFloatingButton />
     </TooltipProvider>
   </PersistQueryClientProvider>
 );

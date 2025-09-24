@@ -265,72 +265,97 @@ def get_analytics_from_supabase():
         print(f"Erro ao buscar analytics: {e}")
         return None
 
-def subscribe_whatsapp_alerts(whatsapp_number):
-    """Cadastra número de WhatsApp para receber alertas de novos editais"""
+def subscribe_telegram_alerts(telegram_id):
+    """Cadastra ID do Telegram para receber alertas de novos editais"""
     supabase = get_supabase_client()
     if not supabase:
         return {"status": "error", "message": "Supabase não disponível"}
     
     try:
-        # Limpar e validar número
-        clean_number = whatsapp_number.replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
-        if not clean_number.startswith("+"):
-            if clean_number.startswith("55"):
-                clean_number = "+" + clean_number
-            else:
-                clean_number = "+55" + clean_number
+        # Limpar e validar Telegram ID (@usuario ou chat_id)
+        clean_id = telegram_id.strip()
+        
+        # Se começar com @, remover o @
+        if clean_id.startswith("@"):
+            clean_id = clean_id[1:]
+        
+        # Validar formato (deve ser username ou chat_id numérico)
+        if not clean_id:
+            return {"status": "error", "message": "ID do Telegram inválido"}
         
         # Verificar se já existe
-        existing = supabase.table('whatsapp_alerts').select('id').eq('numero', clean_number).execute()
+        existing = supabase.table('telegram_alerts').select('id').eq('telegram_id', clean_id).execute()
         
         if existing.data and len(existing.data) > 0:
-            return {"status": "info", "message": "Número já cadastrado para alertas"}
+            return {"status": "info", "message": "Telegram já cadastrado para alertas"}
         
         # Inserir novo cadastro
-        result = supabase.table('whatsapp_alerts').insert({
-            'numero': clean_number,
+        result = supabase.table('telegram_alerts').insert({
+            'telegram_id': clean_id,
             'status': 'ativo',
             'created_at': datetime.now(timezone.utc).isoformat()
         }).execute()
         
         return {
             "status": "success", 
-            "message": "WhatsApp cadastrado com sucesso! Você receberá alertas de novos editais.",
-            "numero": clean_number
+            "message": "Telegram cadastrado com sucesso! Você receberá alertas de novos editais.",
+            "telegram_id": clean_id
         }
         
     except Exception as e:
-        return {"status": "error", "message": f"Erro ao cadastrar WhatsApp: {str(e)}"}
+        return {"status": "error", "message": f"Erro ao cadastrar Telegram: {str(e)}"}
 
-def send_whatsapp_message(to_number, message):
-    """Envia mensagem via WhatsApp usando Twilio"""
+def send_telegram_message(chat_id, message):
+    """Envia mensagem via Telegram Bot API"""
     try:
-        # Configuração Twilio (adicionar nas env vars)
-        twilio_sid = os.environ.get("TWILIO_SID")
-        twilio_token = os.environ.get("TWILIO_TOKEN") 
-        twilio_whatsapp = os.environ.get("TWILIO_WHATSAPP", "whatsapp:+14155238886")
+        telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
         
-        if not all([twilio_sid, twilio_token]):
-            print("Twilio não configurado - simulando envio")
-            return {"status": "simulated", "message": "Twilio não configurado"}
-            
-        # Importar Twilio apenas se disponível
+        if not telegram_token:
+            # Simulação para testes sem token
+            print(f"📱 SIMULANDO Telegram para {chat_id}: {message[:50]}...")
+            return {
+                "status": "simulated", 
+                "message": f"Telegram simulado para {chat_id}"
+            }
+        
         try:
-            from twilio.rest import Client
-            client = Client(twilio_sid, twilio_token)
+            import requests
             
-            message = client.messages.create(
-                body=message,
-                from_=twilio_whatsapp,
-                to=f"whatsapp:{to_number}"
-            )
+            telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+            payload = {
+                "chat_id": chat_id,
+                "text": message,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": True
+            }
             
-            return {"status": "sent", "sid": message.sid}
+            response = requests.post(telegram_url, json=payload, timeout=10)
             
-        except ImportError:
-            print("Biblioteca Twilio não instalada - simulando envio")
-            return {"status": "simulated", "message": "Twilio library não disponível"}
-            
+            if response.status_code == 200:
+                result = response.json()
+                if result.get('ok'):
+                    return {
+                        "status": "sent",
+                        "platform": "telegram",
+                        "message_id": result['result']['message_id']
+                    }
+                else:
+                    return {
+                        "status": "error",
+                        "message": f"Telegram API error: {result.get('description', 'Unknown error')}"
+                    }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"HTTP {response.status_code}: {response.text}"
+                }
+                
+        except (requests.exceptions.RequestException, ImportError) as e:
+            return {
+                "status": "error",
+                "message": f"Erro de conexão: {str(e)}"
+            }
+    
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -352,7 +377,7 @@ def detect_edital_type(edital_titulo):
     return 'outros'
 
 def notify_new_edital(edital_titulo, edital_link, edital_type=None):
-    """Notifica todos os usuários cadastrados sobre novo edital de extensão ou resultado"""
+    """Notifica todos os usuários cadastrados sobre novo edital de extensão ou resultado via Telegram"""
     supabase = get_supabase_client()
     if not supabase:
         return {"status": "error", "message": "Supabase não disponível"}
@@ -370,13 +395,13 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
                 "edital_titulo": edital_titulo
             }
         
-        # Buscar todos os números ativos
-        subscribers = supabase.table('whatsapp_alerts').select('numero').eq('status', 'ativo').execute()
+        # Buscar todos os IDs ativos do Telegram
+        subscribers = supabase.table('telegram_alerts').select('telegram_id').eq('status', 'ativo').execute()
         
         if not subscribers.data:
-            return {"status": "info", "message": "Nenhum usuário cadastrado"}
+            return {"status": "info", "message": "Nenhum usuário cadastrado no Telegram"}
         
-        # Mensagem personalizada por tipo
+        # Mensagem personalizada por tipo (Telegram usa Markdown)
         if edital_type == 'extensao':
             emoji = "🎓"
             tipo_nome = "EDITAL DE EXTENSÃO"
@@ -394,26 +419,26 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
 
 📋 {edital_titulo}
 
-🔗 Acesse: {edital_link}
+🔗 [Acessar Edital]({edital_link})
 
 {mensagem_extra}
 
-💻 Veja mais em: https://seusite.vercel.app
+💻 [Ver mais bolsas](https://seusite.vercel.app)
 
-_Para cancelar alertas, responda PARAR_"""
+_Para cancelar alertas, digite /stop_"""
 
         # Enviar para todos
         sent_count = 0
         errors = []
         
         for subscriber in subscribers.data:
-            numero = subscriber['numero']
-            result = send_whatsapp_message(numero, mensagem)
+            telegram_id = subscriber['telegram_id']
+            result = send_telegram_message(telegram_id, mensagem)
             
             if result['status'] in ['sent', 'simulated']:
                 sent_count += 1
             else:
-                errors.append(f"{numero}: {result.get('message', 'erro')}")
+                errors.append(f"@{telegram_id}: {result.get('message', 'erro')}")
         
         return {
             "status": "completed",
@@ -586,7 +611,7 @@ class handler(BaseHTTPRequestHandler):
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
                     "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
+                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
                 },
                 "status": "ok",
                 "whatsapp_alerts": "✅ Configurado"
@@ -753,7 +778,7 @@ class handler(BaseHTTPRequestHandler):
                 "path": path,
                 "available_endpoints": {
                     "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
+                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
                 }
             }
             return self.send_json_response(response, status_code=404, cache_seconds=300)
@@ -774,15 +799,15 @@ class handler(BaseHTTPRequestHandler):
             return self.send_json_response(response, status_code=400, cache_seconds=0)
         
         # Roteamento POST
-        if path == '/api/alertas/whatsapp':
-            # Cadastrar número para alertas
-            whatsapp_number = data.get('whatsapp', '').strip()
+        if path == '/api/alertas/telegram':
+            # Cadastrar ID do Telegram para alertas
+            telegram_id = data.get('telegram', '').strip()
             
-            if not whatsapp_number:
-                response = {"error": "Número de WhatsApp é obrigatório"}
+            if not telegram_id:
+                response = {"error": "ID do Telegram é obrigatório (@usuario ou chat_id)"}
                 return self.send_json_response(response, status_code=400, cache_seconds=0)
             
-            result = subscribe_whatsapp_alerts(whatsapp_number)
+            result = subscribe_telegram_alerts(telegram_id)
             status_code = 200 if result['status'] == 'success' else 400
             return self.send_json_response(result, status_code=status_code, cache_seconds=0)
             
@@ -817,28 +842,29 @@ class handler(BaseHTTPRequestHandler):
             }
             return self.send_json_response(response, cache_seconds=0)
             
+        
         elif path == '/api/alertas/listar':
-            # Endpoint para listar usuários cadastrados (para debug)
+            # Endpoint para listar usuários do Telegram cadastrados (para debug)
             try:
                 supabase = get_supabase_client()
                 if not supabase:
                     response = {"error": "Supabase não disponível", "total": 0, "usuarios": []}
                     return self.send_json_response(response, cache_seconds=0)
                 
-                # Buscar todos os usuários cadastrados
-                result = supabase.table('whatsapp_alerts').select('numero, status, created_at').execute()
+                # Buscar todos os usuários cadastrados no Telegram
+                result = supabase.table('telegram_alerts').select('telegram_id, status, created_at').execute()
                 
                 usuarios = []
                 for user in result.data or []:
-                    # Mascarar o número para privacidade (mostrar só os últimos 4 dígitos)
-                    numero = user.get('numero', '')
-                    if len(numero) > 4:
-                        numero_mascarado = numero[:-4] + '****'
+                    # Mascarar o ID para privacidade (mostrar só os primeiros 3 e últimos 2 caracteres)
+                    telegram_id = user.get('telegram_id', '')
+                    if len(telegram_id) > 5:
+                        id_mascarado = telegram_id[:3] + '****' + telegram_id[-2:]
                     else:
-                        numero_mascarado = '****'
+                        id_mascarado = telegram_id[:1] + '****'
                         
                     usuarios.append({
-                        "numero_mascarado": numero_mascarado,
+                        "telegram_id_mascarado": '@' + id_mascarado,
                         "status": user.get('status', 'desconhecido'),
                         "data_cadastro": user.get('created_at', '')
                     })
@@ -847,7 +873,7 @@ class handler(BaseHTTPRequestHandler):
                     "total_usuarios": len(usuarios),
                     "usuarios_ativos": len([u for u in usuarios if u['status'] == 'ativo']),
                     "usuarios": usuarios,
-                    "message": f"Total de {len(usuarios)} usuário(s) cadastrado(s)"
+                    "message": f"Total de {len(usuarios)} usuário(s) cadastrado(s) no Telegram"
                 }
                 return self.send_json_response(response, cache_seconds=0)
                 

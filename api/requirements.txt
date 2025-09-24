@@ -1,5 +1,8 @@
 # Dependências mínimas para Supabase
 supabase==2.18.1
 
-# WhatsApp via Twilio (opcional - funciona sem)
+# HTTP requests para comunicação com Baileys
+requests==2.31.0
+
+# WhatsApp via Twilio (backup - funciona sem)
 twilio==9.2.3
