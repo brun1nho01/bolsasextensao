@@ -826,7 +826,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
@@ -988,6 +988,119 @@ class handler(BaseHTTPRequestHandler):
                 }
                 return self.send_json_response(response, cache_seconds=60)
                 
+        elif path == '/api/telegram/detect-production-url':
+            # Detectar URL de produção estável (sem fazer mudanças)
+            current_host = self.headers.get('Host', 'localhost')
+            
+            if '-' in current_host and 'vercel.app' in current_host:
+                # URL de preview com hash
+                project_name = current_host.split('-')[0]
+                production_host = f"{project_name}.vercel.app"
+                is_preview = True
+            else:
+                # URL de produção ou customizada
+                production_host = current_host
+                is_preview = False
+            
+            production_webhook_url = f"https://{production_host}/api/telegram/webhook"
+            
+            return self.send_json_response({
+                "status": "detection_complete",
+                "current_url": f"https://{current_host}",
+                "production_url": f"https://{production_host}",
+                "webhook_url": production_webhook_url,
+                "is_preview_url": is_preview,
+                "url_changes_on_deploy": is_preview,
+                "recommendation": "Use a URL de produção estável para o webhook" if is_preview else "URL já é estável",
+                "project_name": project_name if is_preview else production_host.split('.')[0]
+            }, cache_seconds=0)
+        
+        elif path == '/api/telegram/force-update-webhook':
+            # Forçar atualização do webhook com URL de PRODUÇÃO estável + limpar pendentes
+            try:
+                import requests
+                token = os.environ.get("TELEGRAM_BOT_TOKEN")
+                
+                if not token:
+                    return self.send_json_response({
+                        "status": "error",
+                        "message": "Token não configurado"
+                    }, status_code=400, cache_seconds=0)
+                
+                # Detectar URL de PRODUÇÃO estável (não preview)
+                current_host = self.headers.get('Host', 'localhost')
+                
+                # Se for URL com hash (preview), extrair nome base do projeto
+                if '-' in current_host and 'vercel.app' in current_host:
+                    # Extrair nome do projeto (primeira parte antes do primeiro hífen)
+                    project_name = current_host.split('-')[0]
+                    production_host = f"{project_name}.vercel.app"
+                    production_webhook_url = f"https://{production_host}/api/telegram/webhook"
+                    
+                    print(f"🔍 HOST ATUAL (preview): {current_host}")
+                    print(f"🎯 HOST PRODUÇÃO (estável): {production_host}")
+                else:
+                    # Já é URL de produção ou customizada
+                    production_host = current_host
+                    production_webhook_url = f"https://{current_host}/api/telegram/webhook"
+                    print(f"✅ HOST JÁ É PRODUÇÃO: {current_host}")
+                
+                current_webhook_url = production_webhook_url
+                
+                print(f"🔄 FORÇANDO ATUALIZAÇÃO WEBHOOK PARA: {current_webhook_url}")
+                
+                # 1. Remover webhook atual (limpa pending updates)
+                delete_url = f"https://api.telegram.org/bot{token}/deleteWebhook"
+                delete_response = requests.post(delete_url, json={"drop_pending_updates": True}, timeout=10)
+                delete_result = delete_response.json()
+                
+                print(f"🗑️ WEBHOOK REMOVIDO: {delete_result}")
+                
+                # 2. Aguardar um pouco para garantir limpeza
+                import time
+                time.sleep(2)
+                
+                # 3. Configurar novo webhook com URL atual
+                set_url = f"https://api.telegram.org/bot{token}/setWebhook"
+                set_response = requests.post(set_url, json={
+                    "url": current_webhook_url,
+                    "allowed_updates": ["message"],
+                    "drop_pending_updates": True,
+                    "max_connections": 40
+                }, timeout=10)
+                set_result = set_response.json()
+                
+                print(f"✅ NOVO WEBHOOK CONFIGURADO: {set_result}")
+                
+                # 4. Verificar status final
+                info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
+                info_response = requests.get(info_url, timeout=10)
+                info_result = info_response.json()
+                
+                return self.send_json_response({
+                    "status": "force_update_complete",
+                    "url_detection": {
+                        "current_host": current_host,
+                        "production_host": production_host,
+                        "is_preview_url": current_host != production_host,
+                        "stable_url": production_webhook_url
+                    },
+                    "old_webhook_detected": "URLs com hash que mudam a cada deploy",
+                    "new_webhook_url": current_webhook_url,
+                    "delete_webhook": delete_result,
+                    "set_webhook": set_result,
+                    "final_webhook_info": info_result.get('result', {}),
+                    "pending_updates_cleared": True,
+                    "message": "Webhook configurado com URL DE PRODUÇÃO estável que não muda!",
+                    "solution": "Agora o webhook usa a URL de produção fixa, não as URLs de preview que mudam."
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error", 
+                    "message": f"Erro na atualização forçada: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
         elif path == '/api/telegram/debug-webhook':
             # Debug específico do webhook
             try:
@@ -1131,7 +1244,7 @@ class handler(BaseHTTPRequestHandler):
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
