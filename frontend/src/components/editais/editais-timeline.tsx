@@ -31,8 +31,8 @@ const getStatusConfig = (edital: Edital) => {
   ) {
     return {
       icon: CheckCircle,
-      color: "text-muted-foreground",
-      bgColor: "bg-muted/20",
+      color: "text-danger",
+      bgColor: "bg-danger/20",
       label: "Inscrições Encerradas",
       badge: "badge-danger",
     };

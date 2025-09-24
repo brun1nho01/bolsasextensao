@@ -103,25 +103,6 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
 
       {/* Podium */}
       <div className="relative">
-        {isMobile && (
-          <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-10">
-            <div className="flex items-center gap-1 text-xs text-muted-foreground bg-card/80 backdrop-blur-sm px-2 py-1 rounded-full">
-              <span>Deslize para ver todos</span>
-              <div className="flex gap-0.5">
-                <div className="w-1 h-1 bg-current rounded-full animate-pulse"></div>
-                <div
-                  className="w-1 h-1 bg-current rounded-full animate-pulse"
-                  style={{ animationDelay: "0.2s" }}
-                ></div>
-                <div
-                  className="w-1 h-1 bg-current rounded-full animate-pulse"
-                  style={{ animationDelay: "0.4s" }}
-                ></div>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div
           ref={scrollContainerRef}
           className={`flex items-end gap-2 sm:gap-4 mb-8 pb-4 px-4 scroll-smooth ${
