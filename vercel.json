@@ -1,8 +1,18 @@
 {
-  "buildCommand": "cd frontend && npm install && npm run build",
-  "outputDirectory": "frontend/dist",
-  "installCommand": "cd frontend && npm install",
+  "buildCommand": "cd frontend && rm -rf node_modules package-lock.json && npm install --force && npm run build",
+  "outputDirectory": "frontend/dist", 
+  "installCommand": "cd frontend && rm -rf node_modules package-lock.json && npm install --force",
   "devCommand": "cd frontend && npm run dev",
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "build": {
+    "env": {
+      "NODE_VERSION": "18"
+    }
+  },
   "crons": [
     {
       "path": "/api/scrape?secret=my-scraping-secret-2024",
