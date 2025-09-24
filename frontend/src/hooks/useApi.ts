@@ -89,7 +89,7 @@ export const useEditais = () => {
   return useQuery<EditaisResponse, Error>({
     queryKey: ["editais"],
     queryFn: () => apiFetcher<EditaisResponse>("/api/editais"),
-    staleTime: 15 * 60 * 1000, // 15 minutes
+    staleTime: 30 * 60 * 1000, // 30 minutes
   });
 };
 
