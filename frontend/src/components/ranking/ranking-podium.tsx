@@ -92,9 +92,11 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
         animate={{ opacity: 1, y: 0 }}
         className="text-center"
       >
-        <h2 className="text-3xl font-bold mb-2 flex items-center justify-center gap-3">
-          <TrendingUp className="w-8 h-8 text-primary" />
-          Ranking de Visualizações
+        <h2 className="text-3xl font-bold mb-2">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
+            <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-primary flex-shrink-0" />
+            <span className="text-center">Ranking de Visualizações</span>
+          </div>
         </h2>
         <p className="text-muted-foreground">
           As bolsas mais populares e visualizadas da plataforma

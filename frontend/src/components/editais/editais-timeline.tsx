@@ -31,10 +31,10 @@ const getStatusConfig = (edital: Edital) => {
   ) {
     return {
       icon: CheckCircle,
-      color: "text-danger",
-      bgColor: "bg-danger/20",
+      color: "text-muted-foreground", // Bolinha cinza como pedido
+      bgColor: "bg-muted/20", // Fundo cinza como pedido
       label: "Inscrições Encerradas",
-      badge: "badge-danger",
+      badge: "bg-red-500/10 text-red-600 border border-red-500/20", // Vermelho direto
     };
   }
   // Se não tem data de fim, ou a data é no futuro, consideramos ativo
