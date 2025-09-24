@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, Calendar, User, ChevronRight, Tag, Clock } from "lucide-react";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useDeviceType } from "@/hooks/use-mobile";
 import {
   formatPersonName,
   formatProjectTitle,
@@ -26,7 +26,7 @@ const BolsaListItem = ({
   bolsa: Bolsa;
   onBolsaClick: (bolsa: Bolsa) => void;
 }) => {
-  const isMobile = useIsMobile();
+  const { isMobile, isTablet } = useDeviceType();
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return "N/A";
@@ -48,8 +48,8 @@ const BolsaListItem = ({
       onClick={() => onBolsaClick(bolsa)}
       className="glass-card hover:border-primary/30 cursor-pointer transition-all duration-300"
     >
-      {/* Mobile Layout */}
-      {isMobile ? (
+      {/* Mobile/Tablet Layout */}
+      {isMobile || isTablet ? (
         <div className="space-y-3">
           {/* Header with title and status */}
           <div className="flex items-start justify-between gap-3">

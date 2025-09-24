@@ -3,7 +3,7 @@ import { Trophy, Medal, Award, Eye, TrendingUp } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Bolsa } from "@/types/api";
 import { formatPersonName, formatProjectTitle } from "@/lib/utils";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useDeviceType } from "@/hooks/use-mobile";
 import {
   GlassCard,
   GlassCardContent,
@@ -29,12 +29,13 @@ const podiumCardHeights = ["h-[22rem]", "h-[20rem]", "h-[18rem]"]; // 1º, 2º, 
 export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
   const top3 = topBolsas.slice(0, 3);
   const rest = topBolsas.slice(3);
-  const isMobile = useIsMobile();
+  const { isMobile, isTablet, isDesktop } = useDeviceType();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const needsScroll = isMobile || isTablet;
 
-  // Centralizar o scroll no mobile após o render
+  // Centralizar o scroll no mobile/tablet após o render
   useEffect(() => {
-    if (isMobile && scrollContainerRef.current && topBolsas.length > 0) {
+    if (needsScroll && scrollContainerRef.current && topBolsas.length > 0) {
       const container = scrollContainerRef.current;
 
       const centerOnFirstPlace = () => {
@@ -82,7 +83,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
         }
       }
     }
-  }, [isMobile, topBolsas]);
+  }, [needsScroll, topBolsas]);
 
   return (
     <div className="space-y-8">
@@ -108,12 +109,12 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
         <div
           ref={scrollContainerRef}
           className={`flex items-end gap-2 sm:gap-4 mb-8 pb-4 px-4 scroll-smooth ${
-            isMobile
+            needsScroll
               ? "justify-start overflow-x-auto"
               : "justify-center overflow-x-visible"
           }`}
           style={{
-            scrollSnapType: isMobile ? "x mandatory" : "none",
+            scrollSnapType: needsScroll ? "x mandatory" : "none",
             WebkitOverflowScrolling: "touch",
           }}
         >
@@ -138,15 +139,21 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
                 }}
                 whileHover={{ scale: 1.05, y: -5 }}
                 className={`relative flex-shrink-0 ${
-                  isMobile ? "scroll-snap-align-center" : ""
+                  needsScroll ? "scroll-snap-align-center" : ""
                 }`}
                 style={{
-                  scrollSnapAlign: isMobile ? "center" : "none",
+                  scrollSnapAlign: needsScroll ? "center" : "none",
                 }}
                 onClick={() => onBolsaClick(bolsa)}
               >
                 <GlassCard
-                  className={`w-full max-w-[260px] sm:max-w-[280px] md:w-80 ${cardHeightClass} relative flex flex-col cursor-pointer group`}
+                  className={`w-full ${
+                    isMobile
+                      ? "max-w-[260px]"
+                      : isTablet
+                      ? "max-w-[300px]"
+                      : "max-w-[280px] lg:w-80"
+                  } ${cardHeightClass} relative flex flex-col cursor-pointer group`}
                   hoverable={true}
                 >
                   <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">

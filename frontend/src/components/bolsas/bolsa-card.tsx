@@ -10,7 +10,7 @@ import {
 import { format, formatDistanceToNow, isFuture } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Bolsa } from "@/types/api";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useDeviceType } from "@/hooks/use-mobile";
 import {
   formatPersonName,
   formatProjectTitle,
@@ -32,7 +32,7 @@ interface BolsaCardProps {
 }
 
 export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
-  const isMobile = useIsMobile();
+  const { isMobile, isTablet } = useDeviceType();
   const displayDateStr = bolsa.data_publicacao || bolsa.created_at;
   const displayDate = parseDateAsLocal(displayDateStr);
   const dataFim = parseDateAsLocal(bolsa.data_fim_inscricao);
@@ -60,8 +60,8 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
         className="h-full relative overflow-hidden cursor-pointer"
         onClick={() => onClick(bolsa)}
       >
-        {/* Mobile Layout */}
-        {isMobile ? (
+        {/* Mobile/Tablet Layout */}
+        {isMobile || isTablet ? (
           <div className="space-y-3 relative">
             {/* Top badges */}
             <div className="flex items-start justify-between">

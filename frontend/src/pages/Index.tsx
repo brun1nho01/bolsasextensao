@@ -11,7 +11,7 @@ import { RankingPodium } from "@/components/ranking/ranking-podium";
 import { EditaisTimeline } from "@/components/editais/editais-timeline";
 import { BolsaDetailsModal } from "@/components/modals/bolsa-details-modal";
 import { useBolsas, useRanking, useEditais, useBolsa } from "@/hooks/useApi";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useDeviceType } from "@/hooks/use-mobile";
 import { Bolsa } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Calendar, LayoutGrid, Filter } from "lucide-react";
@@ -83,7 +83,7 @@ const initializer = (searchParams: URLSearchParams): FilterState => {
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const isMobile = useIsMobile();
+  const { isMobile, isTablet, isDesktop } = useDeviceType();
 
   // 4. Substituir múltiplos useStates por um único useReducer
   const [filters, dispatch] = useReducer(
@@ -240,7 +240,7 @@ const Index = () => {
                 className="flex gap-8"
               >
                 {/* Desktop Filters */}
-                {!isMobile && (
+                {isDesktop && (
                   <div className="w-80 flex-shrink-0">
                     <AdvancedFilters
                       filters={filters}
@@ -259,8 +259,8 @@ const Index = () => {
                     <div className="flex items-center gap-4">
                       <ViewToggle view={viewMode} onViewChange={setViewMode} />
 
-                      {/* Mobile Filter Button */}
-                      {isMobile && (
+                      {/* Mobile/Tablet Filter Button */}
+                      {(isMobile || isTablet) && (
                         <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
                           <SheetTrigger asChild>
                             <Button variant="outline" className="glass">
@@ -268,7 +268,10 @@ const Index = () => {
                               Filtros
                             </Button>
                           </SheetTrigger>
-                          <SheetContent side="bottom" className="h-[85vh]">
+                          <SheetContent
+                            side={isTablet ? "right" : "bottom"}
+                            className={isTablet ? "w-96" : "h-[85vh]"}
+                          >
                             <div className="mt-6">
                               <AdvancedFilters
                                 filters={filters}
