@@ -61,17 +61,15 @@ export default function TelegramFloatingButton({
   };
 
   const formatTelegramId = (value: string) => {
-    // Remove espaços
-    let formatted = value.trim();
+    // Remove espaços e caracteres especiais
+    let formatted = value.trim().replace(/[^a-zA-Z0-9_@]/g, "");
 
-    // Se for só números, manter assim (chat_id)
+    // Se for só números, manter assim (chat_id) - PREFERIDO
     if (/^\d+$/.test(formatted)) {
-      return formatted;
+      return formatted.length > 15 ? formatted.substring(0, 15) : formatted;
     }
 
     // Se não for números, tratar como username
-    formatted = formatted.replace(/[^a-zA-Z0-9_@]/g, "");
-
     // Se não começar com @, adicionar
     if (formatted && !formatted.startsWith("@")) {
       formatted = "@" + formatted;
@@ -161,21 +159,24 @@ export default function TelegramFloatingButton({
                     className="text-blue-500 flex-shrink-0 mt-0.5"
                     size={14}
                   />
-                   <div>
-                     <p className="text-xs text-blue-800 font-medium mb-1">
-                       Como encontrar seu ID:
-                     </p>
-                     <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                       <li>Abra o Telegram</li>
-                       <li>Vá em Configurações → Username</li>
-                       <li>
-                         Use <code>@seuusuario</code> ou números como <code>123456789</code>
-                       </li>
-                     </ol>
-                     <p className="text-xs text-blue-600 mt-1 font-medium">
-                       💡 Se der erro, use número ao invés de @username
-                     </p>
-                   </div>
+                  <div>
+                    <p className="text-xs text-blue-800 font-medium mb-1">
+                      Como pegar seu Chat ID:
+                    </p>
+                    <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
+                      <li>
+                        Procure <code>@uenf_alertas_bot</code> no Telegram
+                      </li>
+                      <li>
+                        Envie <code>/start</code>
+                      </li>
+                      <li>O bot responderá com seu Chat ID</li>
+                      <li>Copie o número e cole aqui</li>
+                    </ol>
+                    <p className="text-xs text-blue-600 mt-1 font-medium">
+                      💡 Use sempre números (ex: 123456789) - é mais confiável
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -193,14 +194,14 @@ export default function TelegramFloatingButton({
                     id="telegram"
                     value={telegram}
                     onChange={handleTelegramChange}
-                     placeholder="@usuario ou 123456789"
+                    placeholder="123456789"
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors text-gray-900 bg-white"
                     disabled={status === "loading"}
                     maxLength={33}
                     autoComplete="username"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Use seu nome de usuário do Telegram (ex: @joao123)
+                    Use seu Chat ID numérico (ex: 1917031847)
                   </p>
                 </div>
 

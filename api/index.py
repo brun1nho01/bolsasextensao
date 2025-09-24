@@ -395,6 +395,130 @@ def send_telegram_message(chat_id, message):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
+def setup_telegram_webhook(webhook_url):
+    """Configura webhook do Telegram para receber mensagens"""
+    try:
+        telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        
+        if not telegram_token:
+            return {"status": "error", "message": "Token do Telegram não configurado"}
+        
+        import requests
+        
+        # URL da API do Telegram para configurar webhook
+        api_url = f"https://api.telegram.org/bot{telegram_token}/setWebhook"
+        
+        payload = {
+            "url": webhook_url,
+            "allowed_updates": ["message"]  # Só receber mensagens
+        }
+        
+        response = requests.post(api_url, json=payload, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get('ok'):
+                return {
+                    "status": "success", 
+                    "message": "Webhook configurado com sucesso!",
+                    "webhook_url": webhook_url
+                }
+            else:
+                return {
+                    "status": "error",
+                    "message": f"Erro do Telegram: {result.get('description')}"
+                }
+        else:
+            return {
+                "status": "error",
+                "message": f"HTTP {response.status_code}: {response.text}"
+            }
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def handle_telegram_webhook(update_data):
+    """Processa mensagens recebidas via webhook do Telegram"""
+    try:
+        message = update_data.get('message', {})
+        if not message:
+            return {"status": "ignored", "reason": "Não é uma mensagem"}
+        
+        chat = message.get('chat', {})
+        chat_id = chat.get('id')
+        text = message.get('text', '').strip()
+        
+        if not chat_id or not text:
+            return {"status": "ignored", "reason": "Mensagem inválida"}
+        
+        # Responder ao comando /start
+        if text.lower() in ['/start', 'start', '/help', 'help']:
+            username = message.get('from', {}).get('username', '')
+            first_name = message.get('from', {}).get('first_name', 'Usuário')
+            
+            response_message = f"""🎓 <b>Olá {first_name}! Bem-vindo ao UENF Alertas!</b>
+
+📱 <b>Seu Chat ID:</b> <code>{chat_id}</code>
+
+💡 <b>Como usar:</b>
+1. Copie o número acima
+2. Acesse: https://seusite.vercel.app
+3. Clique no botão azul (📱)
+4. Cole seu Chat ID: <code>{chat_id}</code>
+5. Pronto! Você receberá alertas automáticos
+
+🔔 <b>Você receberá notificações sobre:</b>
+• Novos editais de extensão
+• Resultados de seleções
+
+📝 Digite /stop para cancelar alertas."""
+            
+            send_result = send_telegram_message(chat_id, response_message)
+            
+            return {
+                "status": "handled",
+                "command": text,
+                "chat_id": chat_id,
+                "username": username,
+                "response_sent": send_result.get('status') == 'sent'
+            }
+        
+        # Responder ao comando /stop
+        elif text.lower() in ['/stop', 'stop', 'parar']:
+            try:
+                supabase = get_supabase_client()
+                if supabase:
+                    # Desativar usuário
+                    supabase.table('telegram_alerts').update({
+                        'status': 'inativo'
+                    }).eq('telegram_id', str(chat_id)).execute()
+                    
+                    response_message = "❌ Alertas cancelados! Você não receberá mais notificações.\n\n📱 Para reativar, acesse o site e cadastre-se novamente."
+                else:
+                    response_message = "⚠️ Erro interno. Tente novamente mais tarde."
+            except:
+                response_message = "⚠️ Erro ao cancelar alertas. Tente novamente."
+            
+            send_telegram_message(chat_id, response_message)
+            return {"status": "handled", "command": "stop", "chat_id": chat_id}
+        
+        # Comando não reconhecido
+        else:
+            help_message = f"""🤖 Comandos disponíveis:
+
+/start - Ver seu Chat ID e instruções
+/stop - Cancelar alertas
+
+💡 <b>Seu Chat ID:</b> <code>{chat_id}</code>
+
+📱 Use esse número para se cadastrar no site!"""
+            
+            send_telegram_message(chat_id, help_message)
+            return {"status": "handled", "command": "help", "chat_id": chat_id}
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
 def detect_edital_type(edital_titulo):
     """Detecta o tipo de edital baseado no título"""
     titulo_lower = edital_titulo.lower()
@@ -652,8 +776,8 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook"],
+                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
                 "whatsapp_alerts": "✅ Configurado"
@@ -814,13 +938,43 @@ class handler(BaseHTTPRequestHandler):
                 }
                 return self.send_json_response(response, cache_seconds=60)
                 
+        elif path == '/api/telegram/setup-webhook':
+            # Configurar webhook do Telegram automaticamente
+            try:
+                # URL do webhook é o domínio + /api/telegram/webhook
+                host_header = self.headers.get('Host', 'localhost')
+                webhook_url = f"https://{host_header}/api/telegram/webhook"
+                
+                result = setup_telegram_webhook(webhook_url)
+                
+                if result['status'] == 'success':
+                    return self.send_json_response({
+                        **result,
+                        "instructions": [
+                            "✅ Webhook configurado com sucesso!",
+                            "🤖 Agora os usuários podem:",
+                            "1. Procurar seu bot no Telegram",
+                            "2. Enviar /start",
+                            "3. Receber o Chat ID automaticamente",
+                            "4. Usar o Chat ID para se cadastrar no site"
+                        ]
+                    }, cache_seconds=0)
+                else:
+                    return self.send_json_response(result, status_code=500, cache_seconds=0)
+                    
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro ao configurar webhook: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
         else:
             response = {
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook"],
+                    "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
             return self.send_json_response(response, status_code=404, cache_seconds=300)
@@ -932,6 +1086,21 @@ class handler(BaseHTTPRequestHandler):
                 response = {"error": f"Erro ao listar usuários: {str(e)}", "total": 0}
                 return self.send_json_response(response, status_code=500, cache_seconds=0)
             
+        elif path == '/api/telegram/webhook':
+            # Webhook do Telegram - recebe mensagens dos usuários
+            try:
+                # Verificar se tem dados do webhook
+                if not data:
+                    response = {"error": "Dados do webhook inválidos"}
+                    return self.send_json_response(response, status_code=400, cache_seconds=0)
+                
+                result = handle_telegram_webhook(data)
+                return self.send_json_response(result, cache_seconds=0)
+                
+            except Exception as e:
+                response = {"error": f"Erro ao processar webhook: {str(e)}"}
+                return self.send_json_response(response, status_code=500, cache_seconds=0)
+        
         else:
             response = {"error": "Endpoint POST não encontrado", "path": path}
             return self.send_json_response(response, status_code=404, cache_seconds=0)
