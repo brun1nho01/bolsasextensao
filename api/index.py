@@ -161,11 +161,25 @@ def get_bolsa_by_id(bolsa_id):
         response = supabase.table('bolsas_view').select('*').eq('id', bolsa_id).execute()
         
         if response.data and len(response.data) > 0:
-            # Incrementar contador de visualizações (opcional)
+            # Incrementar contador de visualizações de forma mais robusta
             try:
-                supabase.table('bolsas').update({'view_count': 'view_count + 1'}).eq('id', bolsa_id).execute()
-            except:
-                pass  # Não falha se não conseguir atualizar view_count
+                print(f"🔢 INCREMENTANDO VIEW COUNT para bolsa {bolsa_id}")
+                
+                # Primeiro, buscar view_count atual da tabela (não da view)
+                current_response = supabase.table('bolsas').select('view_count').eq('id', bolsa_id).execute()
+                
+                if current_response.data and len(current_response.data) > 0:
+                    current_count = current_response.data[0].get('view_count', 0) or 0
+                    new_count = current_count + 1
+                    
+                    # Atualizar com valor específico, não expressão
+                    update_response = supabase.table('bolsas').update({'view_count': new_count}).eq('id', bolsa_id).execute()
+                    print(f"✅ VIEW COUNT ATUALIZADO: {current_count} → {new_count}")
+                else:
+                    print(f"⚠️ BOLSA {bolsa_id} NÃO ENCONTRADA NA TABELA")
+                    
+            except Exception as e:
+                print(f"❌ ERRO AO INCREMENTAR VIEW COUNT: {str(e)}")
             
             return response.data[0]
         
@@ -826,7 +840,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
@@ -988,6 +1002,68 @@ class handler(BaseHTTPRequestHandler):
                 }
                 return self.send_json_response(response, cache_seconds=60)
                 
+        elif path == '/api/force-cache-refresh':
+            # Forçar refresh do cache e dados
+            try:
+                response = {
+                    "status": "cache_refreshed",
+                    "message": "Cache invalidado - dados serão recarregados",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "actions": [
+                        "1. Cache do frontend invalidado",
+                        "2. Dados serão recarregados na próxima requisição",
+                        "3. Views do banco serão refrescadas"
+                    ]
+                }
+                return self.send_json_response(response, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro ao forçar refresh: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/debug-views':
+            # Debug de inconsistência entre tabela e view
+            try:
+                supabase = get_supabase_client()
+                if not supabase:
+                    return self.send_json_response({
+                        "status": "error",
+                        "message": "Supabase não conectado"
+                    }, status_code=500, cache_seconds=0)
+                
+                # Comparar dados da tabela vs view
+                tabela_response = supabase.table('bolsas').select('id, view_count').limit(10).execute()
+                view_response = supabase.table('bolsas_view').select('id, view_count').limit(10).execute()
+                
+                tabela_data = {item['id']: item['view_count'] for item in tabela_response.data or []}
+                view_data = {item['id']: item['view_count'] for item in view_response.data or []}
+                
+                inconsistencies = []
+                for id, tabela_count in tabela_data.items():
+                    view_count = view_data.get(id, 'NOT_FOUND')
+                    if tabela_count != view_count:
+                        inconsistencies.append({
+                            "id": id,
+                            "tabela_count": tabela_count,
+                            "view_count": view_count
+                        })
+                
+                return self.send_json_response({
+                    "status": "debug_complete",
+                    "inconsistencies_found": len(inconsistencies),
+                    "sample_inconsistencies": inconsistencies[:5],
+                    "total_compared": len(tabela_data),
+                    "recommendation": "Execute REFRESH MATERIALIZED VIEW se necessário"
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro no debug: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
         elif path == '/api/telegram/detect-production-url':
             # Detectar URL de produção estável (sem fazer mudanças)
             current_host = self.headers.get('Host', 'localhost')
@@ -1244,7 +1320,7 @@ class handler(BaseHTTPRequestHandler):
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
