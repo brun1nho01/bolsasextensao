@@ -312,7 +312,10 @@ def subscribe_telegram_alerts(telegram_id):
 def send_telegram_message(chat_id, message):
     """Envia mensagem via Telegram Bot API"""
     try:
+        print(f"🔗 INICIANDO SEND_TELEGRAM_MESSAGE: chat_id={chat_id}, message_length={len(message)}")
+        
         telegram_token = os.environ.get("TELEGRAM_BOT_TOKEN")
+        print(f"🔑 TOKEN TELEGRAM: {'✅ Configurado' if telegram_token else '❌ Não encontrado'}")
         
         if not telegram_token:
             # Simulação para testes sem token
@@ -347,21 +350,32 @@ def send_telegram_message(chat_id, message):
                 "disable_web_page_preview": True
             }
             
+            print(f"📡 PAYLOAD TELEGRAM: {payload}")
+            print(f"🌐 URL TELEGRAM: {telegram_url}")
+            
             response = requests.post(telegram_url, json=payload, timeout=10)
+            print(f"📊 RESPONSE STATUS: {response.status_code}")
+            print(f"📝 RESPONSE TEXT: {response.text}")
             
             if response.status_code == 200:
                 result = response.json()
+                print(f"📤 TELEGRAM API RESULT: {result}")
+                
                 if result.get('ok'):
-                    return {
+                    success_result = {
                         "status": "sent",
                         "platform": "telegram",
                         "message_id": result['result']['message_id']
                     }
+                    print(f"✅ MENSAGEM ENVIADA COM SUCESSO: {success_result}")
+                    return success_result
                 else:
-                    return {
+                    error_result = {
                         "status": "error",
                         "message": f"Telegram API error: {result.get('description', 'Unknown error')}"
                     }
+                    print(f"❌ ERRO DA API TELEGRAM: {error_result}")
+                    return error_result
             else:
                 # Tentar com @ se falhou sem @ (só para usernames, não números)
                 if isinstance(chat_id, str) and not chat_id.startswith('@') and not chat_id.isdigit():
@@ -381,19 +395,25 @@ def send_telegram_message(chat_id, message):
                                 "message_id": result_retry['result']['message_id']
                             }
                 
-                return {
+                error_http = {
                     "status": "error",
                     "message": f"HTTP {response.status_code}: {response.text}"
                 }
+                print(f"❌ ERRO HTTP TELEGRAM: {error_http}")
+                return error_http
                 
         except (requests.exceptions.RequestException, ImportError) as e:
-            return {
+            error_conn = {
                 "status": "error",
                 "message": f"Erro de conexão: {str(e)}"
             }
+            print(f"❌ ERRO DE CONEXÃO TELEGRAM: {error_conn}")
+            return error_conn
     
     except Exception as e:
-        return {"status": "error", "message": str(e)}
+        error_general = {"status": "error", "message": str(e)}
+        print(f"❌ ERRO GERAL TELEGRAM: {error_general}")
+        return error_general
 
 def setup_telegram_webhook(webhook_url):
     """Configura webhook do Telegram para receber mensagens"""
@@ -493,15 +513,25 @@ def handle_telegram_webhook(update_data):
             send_result = send_telegram_message(chat_id, response_message)
             print(f"✅ RESULTADO ENVIO: {send_result}")
             
-            return {
+            result = {
                 "status": "handled",
                 "command": text,
                 "chat_id": chat_id,
                 "username": username,
                 "first_name": first_name,
                 "response_sent": send_result.get('status') == 'sent',
-                "send_result": send_result
+                "send_result": send_result,
+                "debug_info": {
+                    "original_message": message,
+                    "chat_info": chat,
+                    "from_info": message.get('from', {}),
+                    "response_message_length": len(response_message),
+                    "telegram_token_configured": bool(os.environ.get("TELEGRAM_BOT_TOKEN"))
+                }
             }
+            
+            print(f"🏁 RESULTADO FINAL WEBHOOK: {result}")
+            return result
         
         # Responder ao comando /stop
         elif text.lower() in ['/stop', 'stop', 'parar']:
@@ -998,6 +1028,21 @@ class handler(BaseHTTPRequestHandler):
                     "status": "error",
                     "message": f"Erro no debug: {str(e)}"
                 }, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/telegram/logs':
+            # Ver logs recentes do webhook
+            response = {
+                "status": "logs",
+                "message": "Verificar logs do Vercel Functions para debug",
+                "instructions": [
+                    "1. Acesse vercel.com → Seu projeto",
+                    "2. Vá em Functions → View Function Logs", 
+                    "3. Procure por logs com 📥📤🚀 (nossos emojis)",
+                    "4. Veja se mensagens do Telegram estão chegando"
+                ],
+                "current_webhook": f"https://{self.headers.get('Host')}/api/telegram/webhook"
+            }
+            return self.send_json_response(response, cache_seconds=0)
         
         elif path == '/api/telegram/test-webhook':
             # Teste simples do webhook
