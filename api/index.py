@@ -410,7 +410,8 @@ def setup_telegram_webhook(webhook_url):
         
         payload = {
             "url": webhook_url,
-            "allowed_updates": ["message"]  # Só receber mensagens
+            "allowed_updates": ["message"],  # Só receber mensagens
+            "drop_pending_updates": True  # CRÍTICO: Limpar as 10 mensagens pendentes que estão causando erro 401
         }
         
         response = requests.post(api_url, json=payload, timeout=10)
@@ -1108,41 +1109,68 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/api/telegram/webhook':
             # Webhook do Telegram - recebe mensagens dos usuários
             try:
-                # Log para debug
+                # Log detalhado do request
+                print(f"🌐 WEBHOOK REQUEST HEADERS: {dict(self.headers)}")
                 print(f"📥 WEBHOOK RECEBIDO: {json.dumps(data, indent=2)}")
                 
                 # Verificar se tem dados do webhook
                 if not data:
                     response = {"error": "Dados do webhook inválidos", "received_data": data}
                     print(f"❌ WEBHOOK VAZIO: {response}")
-                    return self.send_json_response(response, status_code=400, cache_seconds=0)
+                    
+                    # Retornar 200 OK mesmo com erro para não gerar 401
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.send_header('Access-Control-Allow-Origin', '*')
+                    self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+                    self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                    self.end_headers()
+                    
+                    self.wfile.write(json.dumps(response).encode('utf-8'))
+                    return
                 
                 result = handle_telegram_webhook(data)
                 print(f"📤 WEBHOOK RESULTADO: {json.dumps(result, indent=2)}")
                 
-                # Adicionar logs para debug na resposta
-                result["debug"] = {
-                    "received_data": data,
-                    "processed_at": datetime.now(timezone.utc).isoformat()
-                }
+                # Telegram espera sempre 200 OK
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+                self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+                self.end_headers()
                 
-                return self.send_json_response(result, cache_seconds=0)
+                # Resposta simplificada para o Telegram (só precisa de ok: true)
+                telegram_response = {"ok": True, "status": "handled"}
+                self.wfile.write(json.dumps(telegram_response).encode('utf-8'))
+                return
                 
             except Exception as e:
                 error_msg = f"Erro ao processar webhook: {str(e)}"
                 print(f"🚨 ERRO WEBHOOK: {error_msg}")
-                response = {
-                    "error": error_msg,
-                    "received_data": data,
-                    "traceback": str(e)
-                }
-                return self.send_json_response(response, status_code=500, cache_seconds=0)
+                
+                # Mesmo com erro, retornar 200 OK para o Telegram
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                
+                response = {"ok": False, "error": error_msg}
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                return
         
         else:
             response = {"error": "Endpoint POST não encontrado", "path": path}
             return self.send_json_response(response, status_code=404, cache_seconds=0)
 
     def do_OPTIONS(self):
-        # Para requisições CORS preflight
-        response = {"status": "ok", "message": "CORS preflight"}
-        return self.send_json_response(response, cache_seconds=86400)  # 24h cache
+        """Handle preflight CORS requests"""
+        print(f"🔧 OPTIONS REQUEST: {self.path}")
+        
+        # Para webhooks e CORS preflight
+        self.send_response(200)
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Telegram-Bot-Api-Secret-Token')
+        self.send_header('Access-Control-Max-Age', '86400')
+        self.end_headers()
