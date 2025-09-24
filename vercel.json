@@ -1,7 +1,7 @@
 {
-  "buildCommand": "cd frontend && rm -rf node_modules package-lock.json && npm install --force && npm run build",
+  "buildCommand": "cd frontend && npm ci && npm run build",
   "outputDirectory": "frontend/dist", 
-  "installCommand": "cd frontend && rm -rf node_modules package-lock.json && npm install --force",
+  "installCommand": "cd frontend && npm ci",
   "devCommand": "cd frontend && npm run dev",
   "functions": {
     "api/index.py": {

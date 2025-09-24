@@ -12,11 +12,21 @@ export default defineConfig({
   },
   build: {
     outDir: "dist",
+    rollupOptions: {
+      external: [],
+      output: {
+        manualChunks: undefined,
+      },
+    },
   },
   // Expõe a versão do package.json para o código do frontend
   define: {
     "import.meta.env.PACKAGE_VERSION": JSON.stringify(
       process.env.npm_package_version
     ),
+  },
+  // Configuração específica para resolver problemas no Vercel
+  optimizeDeps: {
+    force: true,
   },
 });
