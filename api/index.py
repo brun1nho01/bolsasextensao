@@ -796,7 +796,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
@@ -958,6 +958,59 @@ class handler(BaseHTTPRequestHandler):
                 }
                 return self.send_json_response(response, cache_seconds=60)
                 
+        elif path == '/api/telegram/debug-webhook':
+            # Debug específico do webhook
+            try:
+                import requests
+                token = os.environ.get("TELEGRAM_BOT_TOKEN")
+                
+                # Verificar status atual
+                info_url = f"https://api.telegram.org/bot{token}/getWebhookInfo"
+                info_response = requests.get(info_url, timeout=10)
+                webhook_info = info_response.json()
+                
+                # Limpar updates pendentes forçadamente
+                clear_url = f"https://api.telegram.org/bot{token}/getUpdates"
+                clear_response = requests.post(clear_url, json={"offset": -1}, timeout=10)
+                
+                # Reconfigurar webhook com force
+                host_header = self.headers.get('Host', 'localhost')
+                webhook_url = f"https://{host_header}/api/telegram/webhook"
+                
+                set_url = f"https://api.telegram.org/bot{token}/setWebhook"
+                set_response = requests.post(set_url, json={
+                    "url": webhook_url,
+                    "allowed_updates": ["message"],
+                    "drop_pending_updates": True,
+                    "max_connections": 40
+                }, timeout=10)
+                
+                return self.send_json_response({
+                    "status": "debug_complete",
+                    "webhook_info_before": webhook_info.get('result', {}),
+                    "clear_updates": clear_response.json(),
+                    "set_webhook": set_response.json(),
+                    "new_webhook_url": webhook_url
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro no debug: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/telegram/test-webhook':
+            # Teste simples do webhook
+            response = {
+                "status": "webhook_test",
+                "message": "Endpoint de webhook ativo e respondendo",
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "headers_received": dict(self.headers),
+                "method": "GET",
+                "path": path
+            }
+            return self.send_json_response(response, cache_seconds=0)
+        
         elif path == '/api/telegram/setup-webhook':
             # Configurar webhook do Telegram automaticamente
             try:
@@ -993,7 +1046,7 @@ class handler(BaseHTTPRequestHandler):
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
