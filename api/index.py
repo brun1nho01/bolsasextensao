@@ -586,7 +586,7 @@ class handler(BaseHTTPRequestHandler):
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
                     "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection"]
+                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
                 },
                 "status": "ok",
                 "whatsapp_alerts": "✅ Configurado"
@@ -753,7 +753,7 @@ class handler(BaseHTTPRequestHandler):
                 "path": path,
                 "available_endpoints": {
                     "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata"],
-                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection"]
+                    "POST": ["/api/alertas/whatsapp", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar"]
                 }
             }
             return self.send_json_response(response, status_code=404, cache_seconds=300)
@@ -816,6 +816,44 @@ class handler(BaseHTTPRequestHandler):
                 }
             }
             return self.send_json_response(response, cache_seconds=0)
+            
+        elif path == '/api/alertas/listar':
+            # Endpoint para listar usuários cadastrados (para debug)
+            try:
+                supabase = get_supabase_client()
+                if not supabase:
+                    response = {"error": "Supabase não disponível", "total": 0, "usuarios": []}
+                    return self.send_json_response(response, cache_seconds=0)
+                
+                # Buscar todos os usuários cadastrados
+                result = supabase.table('whatsapp_alerts').select('numero, status, created_at').execute()
+                
+                usuarios = []
+                for user in result.data or []:
+                    # Mascarar o número para privacidade (mostrar só os últimos 4 dígitos)
+                    numero = user.get('numero', '')
+                    if len(numero) > 4:
+                        numero_mascarado = numero[:-4] + '****'
+                    else:
+                        numero_mascarado = '****'
+                        
+                    usuarios.append({
+                        "numero_mascarado": numero_mascarado,
+                        "status": user.get('status', 'desconhecido'),
+                        "data_cadastro": user.get('created_at', '')
+                    })
+                
+                response = {
+                    "total_usuarios": len(usuarios),
+                    "usuarios_ativos": len([u for u in usuarios if u['status'] == 'ativo']),
+                    "usuarios": usuarios,
+                    "message": f"Total de {len(usuarios)} usuário(s) cadastrado(s)"
+                }
+                return self.send_json_response(response, cache_seconds=0)
+                
+            except Exception as e:
+                response = {"error": f"Erro ao listar usuários: {str(e)}", "total": 0}
+                return self.send_json_response(response, status_code=500, cache_seconds=0)
             
         else:
             response = {"error": "Endpoint POST não encontrado", "path": path}

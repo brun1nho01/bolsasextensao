@@ -80,6 +80,14 @@ export default function WhatsAppFloatingButton({
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const formatted = formatPhoneNumber(e.target.value);
     setWhatsapp(formatted);
+
+    // Debug: mostrar no console o que está sendo digitado
+    console.log(
+      "WhatsApp digitado:",
+      e.target.value,
+      "→ Formatado:",
+      formatted
+    );
   };
 
   return (
@@ -155,9 +163,10 @@ export default function WhatsAppFloatingButton({
                     value={whatsapp}
                     onChange={handlePhoneChange}
                     placeholder="(22) 99999-9999"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors text-gray-900 bg-white"
                     disabled={status === "loading"}
                     maxLength={15}
+                    autoComplete="tel"
                   />
                 </div>
 
