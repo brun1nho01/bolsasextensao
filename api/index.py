@@ -826,7 +826,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
@@ -1029,6 +1029,46 @@ class handler(BaseHTTPRequestHandler):
                     "message": f"Erro no debug: {str(e)}"
                 }, status_code=500, cache_seconds=0)
         
+        elif path == '/api/telegram/check-messages':
+            # Verificar mensagens pendentes no Telegram
+            try:
+                import requests
+                token = os.environ.get("TELEGRAM_BOT_TOKEN")
+                
+                if not token:
+                    return self.send_json_response({
+                        "status": "error",
+                        "message": "Token não configurado"
+                    }, status_code=400, cache_seconds=0)
+                
+                # Buscar updates pendentes
+                updates_url = f"https://api.telegram.org/bot{token}/getUpdates"
+                updates_response = requests.get(updates_url, timeout=10)
+                updates_data = updates_response.json()
+                
+                # Informações do webhook
+                webhook_url = f"https://api.telegram.org/bot{token}/getWebhookInfo" 
+                webhook_response = requests.get(webhook_url, timeout=10)
+                webhook_data = webhook_response.json()
+                
+                return self.send_json_response({
+                    "status": "check_complete",
+                    "updates": updates_data,
+                    "webhook_info": webhook_data,
+                    "analysis": {
+                        "total_updates": len(updates_data.get('result', [])),
+                        "pending_updates": webhook_data.get('result', {}).get('pending_update_count', 0),
+                        "last_error": webhook_data.get('result', {}).get('last_error_message'),
+                        "webhook_url": webhook_data.get('result', {}).get('url')
+                    }
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro ao verificar mensagens: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
         elif path == '/api/telegram/logs':
             # Ver logs recentes do webhook
             response = {
@@ -1091,7 +1131,7 @@ class handler(BaseHTTPRequestHandler):
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
@@ -1207,13 +1247,19 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/api/telegram/webhook':
             # Webhook do Telegram - recebe mensagens dos usuários
             try:
-                # Log detalhado do request
+                # Log SUPER detalhado
+                print(f"🚨 =================================")
+                print(f"🌐 WEBHOOK REQUEST - METHOD: {self.command}")
+                print(f"🌐 WEBHOOK REQUEST - PATH: {self.path}")
                 print(f"🌐 WEBHOOK REQUEST HEADERS: {dict(self.headers)}")
-                print(f"📥 WEBHOOK RECEBIDO: {json.dumps(data, indent=2)}")
+                print(f"📥 WEBHOOK DATA RAW: {data}")
+                print(f"📥 WEBHOOK DATA TYPE: {type(data)}")
+                print(f"📥 WEBHOOK DATA JSON: {json.dumps(data, indent=2)}")
+                print(f"🚨 =================================")
                 
                 # Verificar se tem dados do webhook
                 if not data:
-                    response = {"error": "Dados do webhook inválidos", "received_data": data}
+                    response = {"error": "Dados do webhook inválidos", "received_data": data, "headers": dict(self.headers)}
                     print(f"❌ WEBHOOK VAZIO: {response}")
                     
                     # Retornar 200 OK mesmo com erro para não gerar 401
@@ -1238,8 +1284,13 @@ class handler(BaseHTTPRequestHandler):
                 self.send_header('Access-Control-Allow-Headers', 'Content-Type')
                 self.end_headers()
                 
-                # Resposta simplificada para o Telegram (só precisa de ok: true)
-                telegram_response = {"ok": True, "status": "handled"}
+                # Incluir dados completos na resposta (para debug)
+                telegram_response = {
+                    "ok": True, 
+                    "status": result.get("status", "handled"),
+                    "debug": result,  # Incluir todos os dados do resultado
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }
                 self.wfile.write(json.dumps(telegram_response).encode('utf-8'))
                 return
                 
