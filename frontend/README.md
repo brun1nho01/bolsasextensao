@@ -1,73 +1,135 @@
-# Welcome to your Lovable project
+# Sistema UENF Bolsas de Extensão
 
-## Project info
+Sistema moderno para consulta e gerenciamento de bolsas de extensão da Universidade Estadual do Norte Fluminense Darcy Ribeiro (UENF).
 
-**URL**: https://lovable.dev/projects/851ba950-e046-42a5-8e19-66bb7c2f360b
+## ✨ Funcionalidades
 
-## How can I edit this code?
+- 🔍 **Busca Avançada**: Filtros por tipo, centro, valor da bolsa e status
+- 📱 **Interface Responsiva**: Design moderno otimizado para desktop e mobile
+- 🔔 **Sistema de Alertas**: Notificações automáticas via Telegram para novos editais
+- 📊 **Dashboard Analytics**: Visualizações e estatísticas em tempo real
+- 🎯 **Ranking de Bolsas**: Sistema de visualização das melhores oportunidades
+- ⚡ **Atualizações Automáticas**: Scraping automático de novos editais
 
-There are several ways of editing your application.
+## 🚀 Tecnologias
 
-**Use Lovable**
+### Frontend
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/851ba950-e046-42a5-8e19-66bb7c2f360b) and start prompting.
+- **React 18** com TypeScript
+- **Vite** para build otimizado
+- **Tailwind CSS** para estilização
+- **Radix UI** para componentes acessíveis
+- **React Query** para gerenciamento de estado
+- **React Router** para navegação
 
-Changes made via Lovable will be committed automatically to this repo.
+### Backend
 
-**Use your preferred IDE**
+- **Python** com Flask
+- **Supabase** para banco de dados
+- **Telegram Bot API** para notificações
+- **Beautiful Soup** para web scraping
+- **Vercel** para deploy e hosting
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🛠️ Desenvolvimento Local
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Pré-requisitos
 
-Follow these steps:
+- Node.js 18+
+- Python 3.9+
+- Git
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+### Instalação
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+# Clonar o repositório
+git clone <seu-repositorio>
+cd projeto-scraper-uenfinovador
 
-# Step 3: Install the necessary dependencies.
-npm i
+# Instalar dependências do frontend
+cd frontend
+npm install
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Executar em modo desenvolvimento
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Variáveis de Ambiente
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+Crie um arquivo `.env` na raiz com:
 
-**Use GitHub Codespaces**
+```env
+SUPABASE_URL=your_supabase_url
+SUPABASE_ANON_KEY=your_supabase_anon_key
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## 📁 Estrutura do Projeto
 
-## What technologies are used for this project?
+```
+projeto-scraper-uenfinovador/
+├── api/                    # Backend Python (Vercel Functions)
+│   ├── index.py           # API principal
+│   └── requirements.txt   # Dependências Python
+├── frontend/              # Frontend React
+│   ├── src/
+│   │   ├── components/    # Componentes React
+│   │   ├── pages/        # Páginas da aplicação
+│   │   └── lib/          # Utilitários e configurações
+│   ├── package.json
+│   └── vite.config.ts
+└── vercel.json           # Configuração de deploy
+```
 
-This project is built with:
+## 🔄 Deploy
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+O projeto está configurado para deploy automático no Vercel:
 
-## How can I deploy this project?
+1. Conecte seu repositório ao Vercel
+2. Configure as variáveis de ambiente
+3. O deploy acontece automaticamente a cada push
 
-Simply open [Lovable](https://lovable.dev/projects/851ba950-e046-42a5-8e19-66bb7c2f360b) and click on Share -> Publish.
+## 🤖 Sistema de Alertas Telegram
 
-## Can I connect a custom domain to my Lovable project?
+Para usar o sistema de notificações:
 
-Yes, you can!
+1. Procure por `@uenf_alertas_bot` no Telegram
+2. Envie `/start` para obter seu Chat ID
+3. Cadastre seu Chat ID no sistema
+4. Receba alertas automáticos sobre novos editais
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## 📊 APIs Disponíveis
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+- `GET /api/bolsas` - Lista todas as bolsas
+- `GET /api/bolsas/{id}` - Detalhes de uma bolsa específica
+- `GET /api/analytics` - Estatísticas do sistema
+- `GET /api/editais` - Lista de editais
+- `POST /api/alertas/notify` - Enviar notificação
+- `POST /api/telegram/webhook` - Webhook do Telegram
+
+## 🎯 Roadmap
+
+- [ ] Sistema de favoritos
+- [ ] Exportação para PDF/Excel
+- [ ] Notificações por email
+- [ ] API pública documentada
+- [ ] Aplicativo mobile nativo
+
+## 🤝 Contribuição
+
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/AmazingFeature`)
+3. Commit suas mudanças (`git commit -m 'Add some AmazingFeature'`)
+4. Push para a branch (`git push origin feature/AmazingFeature`)
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto é desenvolvido para a UENF - Universidade Estadual do Norte Fluminense Darcy Ribeiro.
+
+## 🔧 Suporte
+
+Para suporte técnico ou dúvidas sobre o sistema, entre em contato através dos canais oficiais da UENF.
+
+---
+
+**Sistema UENF Bolsas** - Democratizando o acesso às oportunidades de extensão universitária.
