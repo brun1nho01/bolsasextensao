@@ -298,6 +298,63 @@ const Index = () => {
                       }
                     />
                   </div>
+
+                  {/* Results Counter */}
+                  {!isLoading && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex justify-between items-center mb-6 px-2"
+                    >
+                      <div className="flex items-center gap-4">
+                        <p className="text-sm text-muted-foreground">
+                          {bolsasData?.total ? (
+                            <>
+                              <span className="font-medium text-foreground">
+                                {bolsasData.total}
+                              </span>{" "}
+                              bolsa{bolsasData.total > 1 ? "s" : ""} encontrada
+                              {bolsasData.total > 1 ? "s" : ""}
+                              {(() => {
+                                const activeFilters = [
+                                  filters.q && "busca",
+                                  filters.status !== "all" && "status",
+                                  filters.centro !== "all" && "centro",
+                                  filters.tipo !== "all" && "tipo",
+                                ].filter(Boolean);
+
+                                return activeFilters.length > 0 ? (
+                                  <span className="ml-2 text-xs">
+                                    ({activeFilters.length} filtro
+                                    {activeFilters.length > 1 ? "s" : ""} ativo
+                                    {activeFilters.length > 1 ? "s" : ""})
+                                  </span>
+                                ) : null;
+                              })()}
+                            </>
+                          ) : (
+                            "Nenhuma bolsa encontrada"
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Clear Filters Button */}
+                      {(filters.q ||
+                        filters.status !== "all" ||
+                        filters.centro !== "all" ||
+                        filters.tipo !== "all") && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => dispatch({ type: "CLEAR_FILTERS" })}
+                          className="text-xs hover:bg-muted/50"
+                        >
+                          Limpar filtros
+                        </Button>
+                      )}
+                    </motion.div>
+                  )}
+
                   {viewMode === "grid" ? (
                     <BolsaGrid
                       bolsas={bolsasData?.bolsas ?? []}
