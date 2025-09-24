@@ -11,12 +11,14 @@ import { RankingPodium } from "@/components/ranking/ranking-podium";
 import { EditaisTimeline } from "@/components/editais/editais-timeline";
 import { BolsaDetailsModal } from "@/components/modals/bolsa-details-modal";
 import { useBolsas, useRanking, useEditais, useBolsa } from "@/hooks/useApi";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Bolsa } from "@/types/api";
 import { Button } from "@/components/ui/button";
-import { TrendingUp, Calendar, LayoutGrid } from "lucide-react";
+import { TrendingUp, Calendar, LayoutGrid, Filter } from "lucide-react";
 import { ScrollingBackgroundProvider } from "@/components/layout/scrolling-background";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { ViewToggle } from "@/components/ui/view-toggle";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 
 // 1. Definir a estrutura do estado dos filtros
 type FilterState = {
@@ -81,6 +83,7 @@ const initializer = (searchParams: URLSearchParams): FilterState => {
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const isMobile = useIsMobile();
 
   // 4. Substituir múltiplos useStates por um único useReducer
   const [filters, dispatch] = useReducer(
@@ -189,16 +192,16 @@ const Index = () => {
             <motion.div
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex items-center justify-center gap-4 mb-12"
+              className="flex items-center justify-center gap-2 sm:gap-4 mb-12 flex-wrap px-4"
             >
               <Button
                 variant={currentSection === "bolsas" ? "default" : "outline"}
                 onClick={() => setCurrentSection("bolsas")}
-                className={
+                className={`${
                   currentSection === "bolsas"
                     ? "gradient-primary shadow-glow"
                     : "glass"
-                }
+                } text-sm sm:text-base`}
               >
                 <LayoutGrid className="w-4 h-4 mr-2" />
                 Bolsas
@@ -206,11 +209,11 @@ const Index = () => {
               <Button
                 variant={currentSection === "ranking" ? "default" : "outline"}
                 onClick={() => setCurrentSection("ranking")}
-                className={
+                className={`${
                   currentSection === "ranking"
                     ? "gradient-primary shadow-glow"
                     : "glass"
-                }
+                } text-sm sm:text-base`}
               >
                 <TrendingUp className="w-4 h-4 mr-2" />
                 Ranking
@@ -218,14 +221,14 @@ const Index = () => {
               <Button
                 variant={currentSection === "editais" ? "default" : "outline"}
                 onClick={() => setCurrentSection("editais")}
-                className={
+                className={`${
                   currentSection === "editais"
                     ? "gradient-primary shadow-glow"
                     : "glass"
-                }
+                } text-sm sm:text-base`}
               >
                 <Calendar className="w-4 h-4 mr-2" />
-                Timeline de Editais
+                <span className="hidden sm:inline">Timeline de </span>Editais
               </Button>
             </motion.div>
 
@@ -236,20 +239,54 @@ const Index = () => {
                 animate={{ opacity: 1, x: 0 }}
                 className="flex gap-8"
               >
-                <div className="w-80 flex-shrink-0 hidden lg:block">
-                  <AdvancedFilters
-                    filters={filters}
-                    onFiltersChange={(payload) =>
-                      dispatch({ type: "SET_FILTER", payload })
-                    }
-                    onClearFilters={() => dispatch({ type: "CLEAR_FILTERS" })}
-                    isOpen={filtersOpen}
-                    onToggle={() => setFiltersOpen(!filtersOpen)}
-                  />
-                </div>
+                {/* Desktop Filters */}
+                {!isMobile && (
+                  <div className="w-80 flex-shrink-0">
+                    <AdvancedFilters
+                      filters={filters}
+                      onFiltersChange={(payload) =>
+                        dispatch({ type: "SET_FILTER", payload })
+                      }
+                      onClearFilters={() => dispatch({ type: "CLEAR_FILTERS" })}
+                      isOpen={filtersOpen}
+                      onToggle={() => setFiltersOpen(!filtersOpen)}
+                    />
+                  </div>
+                )}
+
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center mb-8">
-                    <ViewToggle view={viewMode} onViewChange={setViewMode} />
+                  <div className="flex justify-between items-center mb-8 flex-wrap gap-4">
+                    <div className="flex items-center gap-4">
+                      <ViewToggle view={viewMode} onViewChange={setViewMode} />
+
+                      {/* Mobile Filter Button */}
+                      {isMobile && (
+                        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                          <SheetTrigger asChild>
+                            <Button variant="outline" className="glass">
+                              <Filter className="w-4 h-4 mr-2" />
+                              Filtros
+                            </Button>
+                          </SheetTrigger>
+                          <SheetContent side="bottom" className="h-[85vh]">
+                            <div className="mt-6">
+                              <AdvancedFilters
+                                filters={filters}
+                                onFiltersChange={(payload) =>
+                                  dispatch({ type: "SET_FILTER", payload })
+                                }
+                                onClearFilters={() =>
+                                  dispatch({ type: "CLEAR_FILTERS" })
+                                }
+                                isOpen={true}
+                                onToggle={() => {}}
+                              />
+                            </div>
+                          </SheetContent>
+                        </Sheet>
+                      )}
+                    </div>
+
                     <PaginationControls
                       currentPage={filters.page}
                       totalPages={bolsasData?.total_pages ?? 1}

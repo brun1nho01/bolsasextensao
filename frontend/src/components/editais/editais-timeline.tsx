@@ -110,7 +110,7 @@ export function EditaisTimeline({ editais }: EditaisTimelineProps) {
                 {/* Content Card */}
                 <motion.div
                   whileHover={{ scale: 1.02, y: -2 }}
-                  className={`ml-16 md:ml-0 md:w-5/12 ${
+                  className={`ml-8 sm:ml-12 md:ml-0 md:w-5/12 px-2 sm:px-4 ${
                     isLeft ? "md:pr-8" : "md:pl-8"
                   }`}
                 >

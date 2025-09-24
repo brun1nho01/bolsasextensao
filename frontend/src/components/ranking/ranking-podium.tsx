@@ -46,7 +46,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
       </motion.div>
 
       {/* Podium */}
-      <div className="flex items-end justify-center gap-4 mb-8">
+      <div className="flex items-end justify-center gap-2 sm:gap-4 mb-8 overflow-x-auto pb-4 px-4">
         {/* Rearrange for podium effect: 2nd, 1st, 3rd */}
         {[top3[1], top3[0], top3[2]].filter(Boolean).map((bolsa, index) => {
           const actualIndex = index === 0 ? 1 : index === 1 ? 0 : 2;
@@ -67,11 +67,11 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
                 stiffness: 300,
               }}
               whileHover={{ scale: 1.05, y: -5 }}
-              className="relative"
+              className="relative flex-shrink-0"
               onClick={() => onBolsaClick(bolsa)}
             >
               <GlassCard
-                className={`w-80 ${cardHeightClass} relative flex flex-col cursor-pointer group`}
+                className={`w-full max-w-[260px] sm:max-w-[280px] md:w-80 ${cardHeightClass} relative flex flex-col cursor-pointer group`}
                 hoverable={true}
               >
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">

@@ -31,7 +31,7 @@ export function HeroSection({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.3, duration: 0.8 }}
-            className="text-4xl sm:text-6xl lg:text-7xl font-bold mb-6"
+            className="text-2xl sm:text-4xl md:text-6xl lg:text-7xl font-bold mb-6 px-4"
           >
             <br />
             Descubra Oportunidades de Extensão
@@ -41,7 +41,7 @@ export function HeroSection({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.8 }}
-            className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed"
+            className="text-base sm:text-lg md:text-xl text-muted-foreground mb-12 max-w-2xl mx-auto leading-relaxed px-4"
           >
             Explore as bolsas de extensão da UENF com nossa interface moderna.
             Filtros avançados, visualizações detalhadas e atualizações em tempo
@@ -82,7 +82,7 @@ export function HeroSection({
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.8 }}
-            className="mt-16 grid grid-cols-1 gap-8 sm:grid-cols-2 max-w-md mx-auto"
+            className="mt-16 grid grid-cols-1 gap-4 sm:gap-8 sm:grid-cols-2 max-w-md mx-auto px-4"
           >
             <GlassCard className="flex items-center gap-4 p-6 text-left">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/20 flex-shrink-0">
