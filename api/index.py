@@ -283,15 +283,19 @@ def subscribe_telegram_alerts(telegram_id):
         if not clean_id:
             return {"status": "error", "message": "ID do Telegram inválido"}
         
+        # Para chat_id numérico, salvar apenas o número
+        # Para username, salvar sem @
+        final_id = clean_id
+        
         # Verificar se já existe
-        existing = supabase.table('telegram_alerts').select('id').eq('telegram_id', clean_id).execute()
+        existing = supabase.table('telegram_alerts').select('id').eq('telegram_id', final_id).execute()
         
         if existing.data and len(existing.data) > 0:
             return {"status": "info", "message": "Telegram já cadastrado para alertas"}
         
         # Inserir novo cadastro
         result = supabase.table('telegram_alerts').insert({
-            'telegram_id': clean_id,
+            'telegram_id': final_id,
             'status': 'ativo',
             'created_at': datetime.now(timezone.utc).isoformat()
         }).execute()
@@ -299,7 +303,7 @@ def subscribe_telegram_alerts(telegram_id):
         return {
             "status": "success", 
             "message": "Telegram cadastrado com sucesso! Você receberá alertas de novos editais.",
-            "telegram_id": clean_id
+            "telegram_id": final_id
         }
         
     except Exception as e:
@@ -323,15 +327,23 @@ def send_telegram_message(chat_id, message):
             
             telegram_url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
             
-            # Preparar chat_id - se começar com @, tentar como username, senão como chat_id
+            # Preparar chat_id baseado no formato
             final_chat_id = chat_id
-            if isinstance(chat_id, str) and chat_id.startswith('@'):
+            
+            # Se for só números, usar diretamente como chat_id
+            if isinstance(chat_id, str) and chat_id.isdigit():
+                final_chat_id = int(chat_id)  # Converter para número
+            # Se começar com @, remover o @
+            elif isinstance(chat_id, str) and chat_id.startswith('@'):
                 final_chat_id = chat_id[1:]  # Remove o @
+            # Se for username sem @, usar como está
+            else:
+                final_chat_id = chat_id
             
             payload = {
                 "chat_id": final_chat_id,
                 "text": message,
-                "parse_mode": "Markdown",
+                "parse_mode": "HTML",
                 "disable_web_page_preview": True
             }
             
@@ -351,10 +363,15 @@ def send_telegram_message(chat_id, message):
                         "message": f"Telegram API error: {result.get('description', 'Unknown error')}"
                     }
             else:
-                # Tentar com @ se falhou sem @
-                if isinstance(chat_id, str) and not chat_id.startswith('@') and chat_id.isdigit() == False:
-                    payload["chat_id"] = "@" + chat_id
-                    response_retry = requests.post(telegram_url, json=payload, timeout=10)
+                # Tentar com @ se falhou sem @ (só para usernames, não números)
+                if isinstance(chat_id, str) and not chat_id.startswith('@') and not chat_id.isdigit():
+                    retry_payload = {
+                        "chat_id": "@" + chat_id,
+                        "text": message,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True
+                    }
+                    response_retry = requests.post(telegram_url, json=retry_payload, timeout=10)
                     if response_retry.status_code == 200:
                         result_retry = response_retry.json()
                         if result_retry.get('ok'):
@@ -420,7 +437,7 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
         if not subscribers.data:
             return {"status": "info", "message": "Nenhum usuário cadastrado no Telegram"}
         
-        # Mensagem personalizada por tipo (Telegram usa Markdown)
+        # Mensagem personalizada por tipo (HTML é mais seguro que Markdown)
         if edital_type == 'extensao':
             emoji = "🎓"
             tipo_nome = "EDITAL DE EXTENSÃO"
@@ -434,17 +451,21 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
             tipo_nome = "NOVO EDITAL"
             mensagem_extra = "💡 Nova oportunidade disponível!"
             
-        mensagem = f"""{emoji} *{tipo_nome} UENF!*
+        # Escapar caracteres especiais do HTML
+        edital_titulo_safe = edital_titulo.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        edital_link_safe = edital_link.replace('&', '&amp;')
+        
+        mensagem = f"""{emoji} <b>{tipo_nome} UENF!</b>
 
-📋 {edital_titulo}
+📋 {edital_titulo_safe}
 
-🔗 [Acessar Edital]({edital_link})
+🔗 <a href="{edital_link_safe}">Acessar Edital</a>
 
 {mensagem_extra}
 
-💻 [Ver mais bolsas](https://seusite.vercel.app)
+💻 <a href="https://seusite.vercel.app">Ver mais bolsas</a>
 
-_Para cancelar alertas, digite /stop_"""
+<i>Para cancelar alertas, digite /stop</i>"""
 
         # Enviar para todos
         sent_count = 0
@@ -457,7 +478,9 @@ _Para cancelar alertas, digite /stop_"""
             if result['status'] in ['sent', 'simulated']:
                 sent_count += 1
             else:
-                errors.append(f"@{telegram_id}: {result.get('message', 'erro')}")
+                # Formatar ID para erro (adicionar @ só se não for numérico)
+                display_id = telegram_id if telegram_id.isdigit() else f"@{telegram_id}"
+                errors.append(f"{display_id}: {result.get('message', 'erro')}")
         
         return {
             "status": "completed",
@@ -875,15 +898,24 @@ class handler(BaseHTTPRequestHandler):
                 
                 usuarios = []
                 for user in result.data or []:
-                    # Mascarar o ID para privacidade (mostrar só os primeiros 3 e últimos 2 caracteres)
+                    # Mascarar o ID para privacidade 
                     telegram_id = user.get('telegram_id', '')
-                    if len(telegram_id) > 5:
-                        id_mascarado = telegram_id[:3] + '****' + telegram_id[-2:]
+                    
+                    if telegram_id.isdigit():
+                        # Para chat_id numérico, mascarar números
+                        if len(telegram_id) > 5:
+                            id_mascarado = telegram_id[:3] + '****' + telegram_id[-2:]
+                        else:
+                            id_mascarado = telegram_id[:1] + '****'
                     else:
-                        id_mascarado = telegram_id[:1] + '****'
+                        # Para username, mascarar username
+                        if len(telegram_id) > 5:
+                            id_mascarado = '@' + telegram_id[:3] + '****' + telegram_id[-2:]
+                        else:
+                            id_mascarado = '@' + telegram_id[:1] + '****'
                         
                     usuarios.append({
-                        "telegram_id_mascarado": '@' + id_mascarado,
+                        "telegram_id_mascarado": id_mascarado,
                         "status": user.get('status', 'desconhecido'),
                         "data_cadastro": user.get('created_at', '')
                     })
