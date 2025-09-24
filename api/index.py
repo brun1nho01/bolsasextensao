@@ -161,25 +161,28 @@ def get_bolsa_by_id(bolsa_id):
         response = supabase.table('bolsas_view').select('*').eq('id', bolsa_id).execute()
         
         if response.data and len(response.data) > 0:
-            # Incrementar contador de visualizações de forma mais robusta
+            # Incrementar contador - SUPER SIMPLES
             try:
-                print(f"🔢 INCREMENTANDO VIEW COUNT para bolsa {bolsa_id}")
+                print(f"🔢 INCREMENTANDO VIEW para bolsa {bolsa_id}")
                 
-                # Primeiro, buscar view_count atual da tabela (não da view)
-                current_response = supabase.table('bolsas').select('view_count').eq('id', bolsa_id).execute()
+                # Pegar o valor atual direto da view que já temos
+                bolsa_data = response.data[0]
+                current_count = bolsa_data.get('view_count', 0) or 0
+                new_count = current_count + 1
                 
-                if current_response.data and len(current_response.data) > 0:
-                    current_count = current_response.data[0].get('view_count', 0) or 0
-                    new_count = current_count + 1
-                    
-                    # Atualizar com valor específico, não expressão
-                    update_response = supabase.table('bolsas').update({'view_count': new_count}).eq('id', bolsa_id).execute()
-                    print(f"✅ VIEW COUNT ATUALIZADO: {current_count} → {new_count}")
-                else:
-                    print(f"⚠️ BOLSA {bolsa_id} NÃO ENCONTRADA NA TABELA")
-                    
+                print(f"📊 Mudando de {current_count} para {new_count}")
+                
+                # Atualizar na tabela bolsas de forma simples
+                supabase.table('bolsas').update({'view_count': new_count}).eq('id', bolsa_id).execute()
+                
+                # Atualizar o dado que vamos retornar também
+                bolsa_data['view_count'] = new_count
+                
+                print(f"✅ SUCESSO: View count = {new_count}")
+                
             except Exception as e:
-                print(f"❌ ERRO AO INCREMENTAR VIEW COUNT: {str(e)}")
+                print(f"❌ ERRO: {str(e)}")
+                # Se der erro, continua sem incrementar
             
             return response.data[0]
         
@@ -840,7 +843,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views", "/api/test-views-simple", "/api/reset-views-panic"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
@@ -883,8 +886,8 @@ class handler(BaseHTTPRequestHandler):
             bolsa_data = get_bolsa_by_id(bolsa_id)
             
             if bolsa_data:
-                # Dados reais do Supabase - cache longo (1 hora)
-                return self.send_json_response(bolsa_data, cache_seconds=3600)
+                # Dados reais do Supabase - SEM CACHE para debug
+                return self.send_json_response(bolsa_data, cache_seconds=0)
             else:
                 # Bolsa não encontrada
                 response = {
@@ -900,7 +903,7 @@ class handler(BaseHTTPRequestHandler):
             
             if bolsas_data:
                 # Dados reais do Supabase - cache médio (15 min)
-                return self.send_json_response(bolsas_data, cache_seconds=900)
+                return self.send_json_response(bolsas_data, cache_seconds=0)
             else:
                 # Fallback para dados mock
                 response = {
@@ -920,7 +923,7 @@ class handler(BaseHTTPRequestHandler):
             
             if ranking_data:
                 # Dados reais do Supabase - cache médio (30 min)
-                return self.send_json_response(ranking_data, cache_seconds=1800)
+                return self.send_json_response(ranking_data, cache_seconds=0)
             else:
                 # Fallback para dados mock
                 return self.send_json_response([], cache_seconds=60)
@@ -1021,6 +1024,72 @@ class handler(BaseHTTPRequestHandler):
                 return self.send_json_response({
                     "status": "error",
                     "message": f"Erro ao forçar refresh: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/reset-views-panic':
+            # BOTÃO DO PÂNICO - Reseta tudo relacionado a views
+            try:
+                supabase = get_supabase_client()
+                if not supabase:
+                    return self.send_json_response({
+                        "status": "error",
+                        "message": "Supabase não conectado"
+                    }, status_code=500, cache_seconds=0)
+                
+                # 1. Resetar TODAS as views para 0 na tabela bolsas
+                print("🚨 RESET PANIC: Zerando todas as views...")
+                reset_response = supabase.table('bolsas').update({'view_count': 0}).neq('id', 'never-match').execute()
+                
+                # 2. Contar quantas foram afetadas
+                affected_count = len(reset_response.data) if reset_response.data else 0
+                
+                return self.send_json_response({
+                    "status": "panic_reset_complete",
+                    "message": "🚨 RESET TOTAL EXECUTADO - Todas as views zeradas",
+                    "affected_rows": affected_count,
+                    "actions": [
+                        "1. ✅ Todas as views zeradas na tabela bolsas",
+                        "2. ✅ Cache da API removido (sem cache)",
+                        "3. 🔄 Agora limpe o cache do navegador e recarregue"
+                    ],
+                    "next_steps": "Abra o navegador em modo anônimo ou limpe cache e recarregue",
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro no reset: {str(e)}"
+                }, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/test-views-simple':
+            # Teste super simples para ver views
+            try:
+                supabase = get_supabase_client()
+                if not supabase:
+                    return self.send_json_response({
+                        "status": "error",
+                        "message": "Supabase não conectado"
+                    }, status_code=500, cache_seconds=0)
+                
+                # Buscar 3 bolsas da tabela direta
+                tabela_response = supabase.table('bolsas').select('id, view_count, nome_projeto').limit(3).execute()
+                
+                # Buscar as mesmas da view
+                view_response = supabase.table('bolsas_view').select('id, view_count, nome_projeto').limit(3).execute()
+                
+                return self.send_json_response({
+                    "status": "test_complete",
+                    "message": "Comparação simples tabela vs view",
+                    "tabela_bolsas": tabela_response.data or [],
+                    "view_bolsas": view_response.data or [],
+                    "timestamp": datetime.now(timezone.utc).isoformat()
+                }, cache_seconds=0)
+                
+            except Exception as e:
+                return self.send_json_response({
+                    "status": "error",
+                    "message": f"Erro no teste: {str(e)}"
                 }, status_code=500, cache_seconds=0)
         
         elif path == '/api/debug-views':
@@ -1320,7 +1389,7 @@ class handler(BaseHTTPRequestHandler):
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views", "/api/test-views-simple", "/api/reset-views-panic"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }
