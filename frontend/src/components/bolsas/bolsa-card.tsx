@@ -90,10 +90,10 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
               variant="outline"
               className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm ${
                 bolsa.status === "disponivel"
-                  ? "bg-success text-white border-success/20"
+                  ? "bg-success/10 text-success border-success/20"
                   : bolsa.status === "aberta"
-                  ? "bg-info text-white border-info/20"
-                  : "bg-danger text-white border-danger/20"
+                  ? "bg-info/10 text-info border-info/20"
+                  : "bg-danger/10 text-danger border-danger/20"
               }`}
             >
               {bolsa.vagas_total || 1}{" "}
@@ -221,10 +221,10 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
                   variant="outline"
                   className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm ${
                     bolsa.status === "disponivel"
-                      ? "bg-success text-white border-success/20"
+                      ? "bg-success/10 text-success border-success/20"
                       : bolsa.status === "aberta"
-                      ? "bg-info text-white border-info/20"
-                      : "bg-danger text-white border-danger/20"
+                      ? "bg-info/10 text-info border-info/20"
+                      : "bg-danger/10 text-danger border-danger/20"
                   }`}
                 >
                   {bolsa.vagas_total || 1}{" "}

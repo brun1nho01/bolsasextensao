@@ -93,7 +93,7 @@ export function HeroSection({
                   {totalProjetos ?? "..."}
                 </div>
                 <div className="text-sm text-muted-foreground">
-                  Bolsas Ativas
+                  Vagas Totais
                 </div>
               </div>
             </GlassCard>
@@ -106,7 +106,9 @@ export function HeroSection({
                 <div className="text-3xl font-bold text-success">
                   {bolsasPreenchidas ?? "..."}
                 </div>
-                <div className="text-sm text-muted-foreground">Preenchidas</div>
+                <div className="text-sm text-muted-foreground">
+                  Vagas Preenchidas
+                </div>
               </div>
             </GlassCard>
           </motion.div>

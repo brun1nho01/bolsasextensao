@@ -231,17 +231,24 @@ def get_analytics_from_supabase():
     try:
         analytics_data = {}
         
-        # Total de bolsas - USANDO VIEW AGRUPADA
-        total_response = supabase.table('bolsas_view_agrupada').select('*', count='exact').execute()
-        analytics_data['total_bolsas'] = total_response.count if total_response.count is not None else 0
+        # Total de vagas - SOMANDO VAGAS_TOTAL DA VIEW AGRUPADA
+        total_response = supabase.table('bolsas_view_agrupada').select('vagas_total').execute()
+        total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in (total_response.data or []))
+        analytics_data['total_bolsas'] = total_vagas
         
-        # Bolsas por status - USANDO VIEW AGRUPADA  
+        # Vagas por status - SOMANDO VAGAS POR STATUS DA VIEW AGRUPADA  
         try:
-            status_response = supabase.table('bolsas_view_agrupada').select('status', count='exact').execute()
+            status_response = supabase.table('bolsas_view_agrupada').select('status,vagas_total,vagas_preenchidas').execute()
             status_counts = {}
             for bolsa in status_response.data or []:
                 status = bolsa.get('status', 'desconhecido')
-                status_counts[status] = status_counts.get(status, 0) + 1
+                if status == 'preenchida':
+                    # Para preenchidas, usar vagas_total (todas as vagas estão preenchidas)
+                    vagas_count = bolsa.get('vagas_total', 1)
+                else:
+                    # Para outras, usar vagas_total
+                    vagas_count = bolsa.get('vagas_total', 1)
+                status_counts[status] = status_counts.get(status, 0) + vagas_count
             analytics_data['bolsas_por_status'] = status_counts
         except:
             analytics_data['bolsas_por_status'] = {}
