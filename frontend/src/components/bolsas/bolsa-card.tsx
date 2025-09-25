@@ -80,24 +80,28 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
             {formatProjectTitle(bolsa.nome_projeto)}
           </h3>
 
-          {/* Type badge and Vagas count */}
+          {/* Info badges row */}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className="w-fit text-xs">
               {bolsa.tipo}
             </Badge>
-            {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO MOBILE */}
-            <Badge
-              variant="outline"
-              className={`text-xs font-semibold ${
-                bolsa.status === "disponivel"
-                  ? "border-green-500 text-green-700"
-                  : "border-blue-500 text-blue-700"
+            {/* Perfil da bolsa */}
+            {bolsa.numero_perfil && (
+              <Badge variant="secondary" className="text-xs font-bold">
+                Perfil {bolsa.numero_perfil}
+              </Badge>
+            )}
+            {/* Quantidade de vagas como texto simples */}
+            <span
+              className={`text-xs font-medium ${
+                bolsa.status === "disponivel" || bolsa.status === "aberta"
+                  ? "text-green-700"
+                  : "text-blue-700"
               }`}
             >
-              {bolsa.status === "disponivel"
-                ? `${bolsa.vagas_disponiveis || bolsa.vagas_total || 1} vagas`
-                : `${bolsa.vagas_total || 1} vagas`}
-            </Badge>
+              {bolsa.vagas_total || 1}{" "}
+              {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
+            </span>
           </div>
 
           {/* Orientador */}
@@ -191,27 +195,27 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
           />
 
           <GlassCardContent className="space-y-4">
-            {/* Status */}
+            {/* Status and badges */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <StatusBadge status={bolsa.status} />
-                {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO CARD */}
-                <Badge
-                  variant="outline"
-                  className={`text-xs font-semibold ${
-                    bolsa.status === "disponivel"
-                      ? "border-green-500 text-green-700"
-                      : "border-blue-500 text-blue-700"
+                {/* Perfil da bolsa */}
+                {bolsa.numero_perfil && (
+                  <Badge variant="secondary" className="text-xs font-bold">
+                    Perfil {bolsa.numero_perfil}
+                  </Badge>
+                )}
+                {/* Quantidade de vagas como texto simples */}
+                <span
+                  className={`text-xs font-medium ${
+                    bolsa.status === "disponivel" || bolsa.status === "aberta"
+                      ? "text-green-700"
+                      : "text-blue-700"
                   }`}
                 >
-                  {bolsa.status === "disponivel"
-                    ? `${
-                        bolsa.vagas_disponiveis || bolsa.vagas_total || 1
-                      } vagas`
-                    : `${bolsa.vagas_total || 1} vagas (${
-                        bolsa.vagas_preenchidas || 0
-                      } preenchidas)`}
-                </Badge>
+                  {bolsa.vagas_total || 1}{" "}
+                  {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
+                </span>
               </div>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Eye className="w-4 h-4" />

@@ -83,27 +83,30 @@ export function BolsaDetailsModal({
               </div>
             </div>
 
-            {/* Status and Views */}
+            {/* Status and Info */}
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <StatusBadge status={bolsa.status} />
-                {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO MODAL */}
-                <Badge
-                  variant="outline"
-                  className={`text-sm font-semibold ${
-                    bolsa.status === "disponivel"
-                      ? "border-green-500 text-green-700"
-                      : "border-blue-500 text-blue-700"
+                {/* Perfil da bolsa */}
+                {bolsa.numero_perfil && (
+                  <Badge variant="secondary" className="text-sm font-bold">
+                    Perfil {bolsa.numero_perfil}
+                  </Badge>
+                )}
+                {/* Quantidade de vagas como texto simples */}
+                <span
+                  className={`text-sm font-medium ${
+                    bolsa.status === "disponivel" || bolsa.status === "aberta"
+                      ? "text-green-700"
+                      : "text-blue-700"
                   }`}
                 >
-                  {bolsa.status === "disponivel"
-                    ? `${
-                        bolsa.vagas_disponiveis || bolsa.vagas_total || 1
-                      } vagas disponíveis`
-                    : `${bolsa.vagas_total || 1} vagas total (${
-                        bolsa.vagas_preenchidas || 0
-                      } preenchidas)`}
-                </Badge>
+                  {bolsa.vagas_total || 1}{" "}
+                  {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
+                  {bolsa.status === "disponivel" || bolsa.status === "aberta"
+                    ? " disponíveis"
+                    : " total"}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Eye className="w-5 h-5" />
@@ -280,6 +283,16 @@ export function BolsaDetailsModal({
                   <span className="text-muted-foreground">Tipo:</span>
                   <p className="font-medium">{bolsa.tipo}</p>
                 </div>
+                {bolsa.numero_perfil && (
+                  <div>
+                    <span className="text-muted-foreground">Perfil:</span>
+                    <p className="font-medium">
+                      <Badge variant="secondary" className="text-sm">
+                        Perfil {bolsa.numero_perfil}
+                      </Badge>
+                    </p>
+                  </div>
+                )}
                 {bolsa.remuneracao && bolsa.remuneracao > 0 && (
                   <div>
                     <span className="text-muted-foreground">Remuneração:</span>

@@ -82,28 +82,30 @@ const BolsaListItem = ({
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
 
-          {/* Type badge and Vagas */}
+          {/* Info badges */}
           <div className="flex items-center gap-2 flex-wrap">
             {bolsa.tipo && (
               <Badge variant="outline" className="w-fit text-xs">
                 {bolsa.tipo}
               </Badge>
             )}
-            {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NA LISTA */}
-            <Badge
-              variant="outline"
-              className={`text-xs font-semibold ${
-                bolsa.status === "disponivel"
-                  ? "border-green-500 text-green-700"
-                  : "border-blue-500 text-blue-700"
+            {/* Perfil da bolsa */}
+            {bolsa.numero_perfil && (
+              <Badge variant="secondary" className="text-xs font-bold">
+                Perfil {bolsa.numero_perfil}
+              </Badge>
+            )}
+            {/* Quantidade de vagas como texto simples */}
+            <span
+              className={`text-xs font-medium ${
+                bolsa.status === "disponivel" || bolsa.status === "aberta"
+                  ? "text-green-700"
+                  : "text-blue-700"
               }`}
             >
-              {bolsa.status === "disponivel"
-                ? `${bolsa.vagas_disponiveis || bolsa.vagas_total || 1} vagas`
-                : `${bolsa.vagas_total || 1} vagas (${
-                    bolsa.vagas_preenchidas || 0
-                  } preenchidas)`}
-            </Badge>
+              {bolsa.vagas_total || 1}{" "}
+              {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
+            </span>
           </div>
 
           {/* Deadline warning */}
