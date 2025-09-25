@@ -89,26 +89,29 @@ const BolsaListItem = ({
                 {bolsa.tipo}
               </Badge>
             )}
-            {/* Perfil da bolsa */}
-            {bolsa.numero_perfil && (
-              <Badge variant="secondary" className="text-xs font-bold">
-                Perfil {bolsa.numero_perfil}
-              </Badge>
-            )}
-            {/* Badge de quantidade de vagas */}
+            {/* Badge de quantidade de vagas - primeiro */}
             <Badge
               variant="outline"
-              className={`text-xs font-medium ${
+              className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm ${
                 bolsa.status === "disponivel"
-                  ? "border-green-500 text-green-700"
+                  ? "bg-success/10 text-success border-success/20"
                   : bolsa.status === "aberta"
-                  ? "border-blue-500 text-blue-700"
-                  : "border-red-500 text-red-700"
+                  ? "bg-info/10 text-info border-info/20"
+                  : "bg-danger/10 text-danger border-danger/20"
               }`}
             >
               {bolsa.vagas_total || 1}{" "}
               {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
             </Badge>
+            {/* Badge de perfil - segundo */}
+            {bolsa.numero_perfil && (
+              <Badge
+                variant="outline"
+                className="text-xs font-medium px-3 py-1 rounded-full animate-pulse bg-secondary/10 text-secondary border-secondary/20 backdrop-blur-sm"
+              >
+                Perfil {bolsa.numero_perfil}
+              </Badge>
+            )}
           </div>
 
           {/* Deadline warning */}
