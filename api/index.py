@@ -231,13 +231,13 @@ def get_analytics_from_supabase():
     try:
         analytics_data = {}
         
-        # Total de bolsas
-        total_response = supabase.table('bolsas_view').select('*', count='exact').execute()
+        # Total de bolsas - USANDO VIEW AGRUPADA
+        total_response = supabase.table('bolsas_view_agrupada').select('*', count='exact').execute()
         analytics_data['total_bolsas'] = total_response.count if total_response.count is not None else 0
         
-        # Bolsas por status
+        # Bolsas por status - USANDO VIEW AGRUPADA  
         try:
-            status_response = supabase.table('bolsas_view').select('status', count='exact').execute()
+            status_response = supabase.table('bolsas_view_agrupada').select('status', count='exact').execute()
             status_counts = {}
             for bolsa in status_response.data or []:
                 status = bolsa.get('status', 'desconhecido')
@@ -246,9 +246,9 @@ def get_analytics_from_supabase():
         except:
             analytics_data['bolsas_por_status'] = {}
             
-        # Centros mais populares (top 5)
+        # Centros mais populares (top 5) - USANDO VIEW AGRUPADA
         try:
-            centros_response = supabase.table('bolsas_view').select('centro', count='exact').execute()
+            centros_response = supabase.table('bolsas_view_agrupada').select('centro', count='exact').execute()
             centro_counts = {}
             for bolsa in centros_response.data or []:
                 centro = bolsa.get('centro', 'Não informado')
@@ -260,9 +260,9 @@ def get_analytics_from_supabase():
         except:
             analytics_data['centros_populares'] = []
             
-        # Tipos mais procurados (top 5)
+        # Tipos mais procurados (top 5) - USANDO VIEW AGRUPADA
         try:
-            tipos_response = supabase.table('bolsas_view').select('tipo', count='exact').execute()
+            tipos_response = supabase.table('bolsas_view_agrupada').select('tipo', count='exact').execute()
             tipo_counts = {}
             for bolsa in tipos_response.data or []:
                 tipo = bolsa.get('tipo', 'Não informado')
