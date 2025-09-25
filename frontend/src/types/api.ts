@@ -34,6 +34,9 @@ export interface BolsasResponse {
   page_size: number;
   total_pages: number;
   agrupadas?: boolean; // 🆕 Indica se são bolsas agrupadas
+  // 🆕 CAMPOS PARA CONTAGEM DE VAGAS
+  total_vagas?: number; // Soma total de vagas (222)
+  vagas_preenchidas?: number; // Soma de vagas preenchidas
 }
 
 // A interface Edital foi corrigida para refletir os dados reais do backend.

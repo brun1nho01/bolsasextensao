@@ -537,13 +537,24 @@ class SupabaseManager:
             total_count = response.count if response.count is not None else 0
             total_pages = (total_count + page_size - 1) // page_size
 
+            # 🆕 Calcular totais de vagas para os dados da página atual
+            total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in bolsas)
+            
+            # 🆕 Calcular vagas preenchidas (somar vagas_total das bolsas com status preenchida)
+            vagas_preenchidas = sum(
+                bolsa.get('vagas_total', 1) for bolsa in bolsas 
+                if bolsa.get('status') == 'preenchida'
+            )
+
             return {
                 "bolsas": bolsas,
                 "total": total_count,
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
-                "agrupadas": True  # Indica que são bolsas agrupadas
+                "agrupadas": True,  # Indica que são bolsas agrupadas
+                "total_vagas": total_vagas,  # 🆕 Total de vagas (soma)
+                "vagas_preenchidas": vagas_preenchidas  # 🆕 Vagas preenchidas (soma)
             }
         except Exception as e:
             print(f"  > Erro ao buscar bolsas agrupadas: {e}")

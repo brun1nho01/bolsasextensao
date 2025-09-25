@@ -111,13 +111,24 @@ def get_bolsas_from_supabase(params):
             total_count = response.count if response.count is not None else 0
             total_pages = (total_count + page_size - 1) // page_size
             
+            # Calcular totais de vagas
+            total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in response.data)
+            
+            # Calcular vagas preenchidas (somar vagas_total das bolsas com status preenchida)
+            vagas_preenchidas = sum(
+                bolsa.get('vagas_total', 1) for bolsa in response.data 
+                if bolsa.get('status') == 'preenchida'
+            )
+            
             return {
                 "bolsas": response.data,
                 "total": total_count,
                 "page": page,
                 "page_size": page_size,
                 "total_pages": total_pages,
-                "agrupadas": True  # Indica que são bolsas agrupadas
+                "agrupadas": True,  # Indica que são bolsas agrupadas
+                "total_vagas": total_vagas,  # 🆕 Total de vagas (soma)
+                "vagas_preenchidas": vagas_preenchidas  # 🆕 Vagas preenchidas (soma)
             }
         
         return None

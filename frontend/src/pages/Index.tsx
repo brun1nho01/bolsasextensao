@@ -147,8 +147,10 @@ const Index = () => {
   const { data: totalBolsasData } = useBolsas({ page_size: 1 });
   const { data: selectedBolsaData } = useBolsa(selectedBolsaId || "");
 
-  const bolsasAtivas = totalBolsasData?.total;
-  const bolsasPreenchidas = preenchidasData?.total;
+  // 🆕 Usar contagem de vagas ao invés de contagem de bolsas
+  const bolsasAtivas = totalBolsasData?.total_vagas ?? totalBolsasData?.total;
+  const bolsasPreenchidas =
+    totalBolsasData?.vagas_preenchidas ?? preenchidasData?.total;
 
   useEffect(() => {
     if (error) {

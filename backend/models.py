@@ -48,6 +48,9 @@ class BolsasResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+    # 🆕 CAMPOS PARA CONTAGEM DE VAGAS
+    total_vagas: Optional[int] = None  # Soma total de vagas
+    vagas_preenchidas: Optional[int] = None  # Soma de vagas preenchidas
 
 class Projeto(BaseModel):
     id: uuid.UUID

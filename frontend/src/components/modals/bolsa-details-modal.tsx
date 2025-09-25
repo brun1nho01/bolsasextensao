@@ -92,10 +92,10 @@ export function BolsaDetailsModal({
                   variant="outline"
                   className={`text-sm font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm ${
                     bolsa.status === "disponivel"
-                      ? "bg-success/10 text-success border-success/20"
+                      ? "bg-success/10 text-white border-success/20"
                       : bolsa.status === "aberta"
-                      ? "bg-info/10 text-info border-info/20"
-                      : "bg-danger/10 text-danger border-danger/20"
+                      ? "bg-info/10 text-white border-info/20"
+                      : "bg-danger/10 text-white border-danger/20"
                   }`}
                 >
                   {bolsa.vagas_total || 1}{" "}
