@@ -39,6 +39,20 @@ interface BolsaCardProps {
 
 export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
   const { isMobile, isTablet, isDesktop } = useDeviceType();
+
+  // 🐛 DEBUG: Log para verificar dados das vagas
+  if (
+    bolsa.nome_projeto.includes("CAMINHOS DE BARRO") ||
+    bolsa.nome_projeto.includes("FATORES SOCIOECONÔMICOS")
+  ) {
+    console.log(`🔍 DEBUG ${bolsa.nome_projeto.substring(0, 30)}:`, {
+      vagas_total: bolsa.vagas_total,
+      vagas_disponiveis: bolsa.vagas_disponiveis,
+      vagas_preenchidas: bolsa.vagas_preenchidas,
+      tipo: bolsa.tipo,
+      status: bolsa.status,
+    });
+  }
   const displayDateStr = bolsa.data_publicacao || bolsa.created_at;
   const displayDate = parseDateAsLocal(displayDateStr);
   const dataFim = parseDateAsLocal(bolsa.data_fim_inscricao);
@@ -331,8 +345,13 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
         type: "spring",
         damping: 25,
       }}
-      whileHover={{ scale: 1.02, y: -4 }}
-      className="group"
+      whileHover={{
+        scale: 1.02,
+        y: -4,
+        zIndex: 10,
+      }}
+      className="group relative"
+      style={{ zIndex: 1 }}
     >
       {/* Desktop: Card with tooltip preview */}
       {isDesktop ? (
