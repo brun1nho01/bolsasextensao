@@ -6,7 +6,7 @@
   "crons": [
     {
       "path": "/api/scrape?secret=my-scraping-secret-2024",
-      "schedule": "0 4 * * *"
+      "schedule": "0 9 * * *"
     }
   ],
   "rewrites": [

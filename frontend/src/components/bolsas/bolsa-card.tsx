@@ -80,10 +80,27 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
             {formatProjectTitle(bolsa.nome_projeto)}
           </h3>
 
-          {/* Type badge */}
-          <Badge variant="outline" className="w-fit text-xs">
-            {bolsa.tipo}
-          </Badge>
+          {/* Type badge and Vagas count */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge variant="outline" className="w-fit text-xs">
+              {bolsa.tipo}
+            </Badge>
+            {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO MOBILE */}
+            {bolsa.vagas_total && bolsa.vagas_total > 1 && (
+              <Badge
+                variant="outline"
+                className={`text-xs font-semibold ${
+                  bolsa.status === "disponivel"
+                    ? "border-green-500 text-green-700"
+                    : "border-blue-500 text-blue-700"
+                }`}
+              >
+                {bolsa.status === "disponivel"
+                  ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
+                  : `${bolsa.vagas_total} vagas`}
+              </Badge>
+            )}
+          </div>
 
           {/* Orientador */}
           <div className="flex items-center gap-2">
@@ -178,7 +195,26 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
           <GlassCardContent className="space-y-4">
             {/* Status */}
             <div className="flex items-center justify-between">
-              <StatusBadge status={bolsa.status} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={bolsa.status} />
+                {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO CARD */}
+                {bolsa.vagas_total && bolsa.vagas_total > 1 && (
+                  <Badge
+                    variant="outline"
+                    className={`text-xs font-semibold ${
+                      bolsa.status === "disponivel"
+                        ? "border-green-500 text-green-700"
+                        : "border-blue-500 text-blue-700"
+                    }`}
+                  >
+                    {bolsa.status === "disponivel"
+                      ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
+                      : `${bolsa.vagas_total} vagas (${
+                          bolsa.vagas_preenchidas || 0
+                        } preenchidas)`}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Eye className="w-4 h-4" />
                 <motion.span

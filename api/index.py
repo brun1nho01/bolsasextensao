@@ -587,21 +587,27 @@ def handle_telegram_webhook(update_data):
         return {"status": "error", "message": str(e)}
 
 def detect_edital_type(edital_titulo):
-    """Detecta o tipo de edital baseado no título"""
+    """
+    Detecta o tipo de edital baseado no título.
+    🎯 SEGUE A MESMA LÓGICA DO SCRAPER.PY - apenas editais com "proex" ou "extensão"
+    """
     titulo_lower = edital_titulo.lower()
     
-    # Detectar editais de resultado
+    # 1️⃣ PRIMEIRO: Verifica se é edital de EXTENSÃO (mesma lógica do scraper)
+    # Só processa se tiver "proex" ou "extensão" no título
+    is_extensao = 'proex' in titulo_lower or 'extensão' in titulo_lower
+    
+    if not is_extensao:
+        # Se não tem "proex" nem "extensão", é "outros" (não notifica)
+        return 'outros'
+    
+    # 2️⃣ SEGUNDO: Se é de extensão, verifica se é INSCRIÇÃO ou RESULTADO
     resultado_keywords = ['resultado', 'classificação', 'classificados', 'aprovados', 'selecionados']
     if any(keyword in titulo_lower for keyword in resultado_keywords):
         return 'resultado'
     
-    # Detectar editais de extensão
-    extensao_keywords = ['extensão', 'extensao', 'discente', 'voluntário', 'voluntario']
-    if any(keyword in titulo_lower for keyword in extensao_keywords):
-        return 'extensao'
-    
-    # Outros editais (mestrado, doutorado, etc)
-    return 'outros'
+    # 3️⃣ Se tem "proex"/"extensão" mas não tem palavras de resultado, é INSCRIÇÃO
+    return 'extensao'
 
 def notify_new_edital(edital_titulo, edital_link, edital_type=None):
     """Notifica todos os usuários cadastrados sobre novo edital de extensão ou resultado via Telegram"""
@@ -614,12 +620,13 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
         if not edital_type:
             edital_type = detect_edital_type(edital_titulo)
         
-        # Só notificar para editais de extensão ou resultado
+        # 🎯 MESMA LÓGICA DO SCRAPER: Só notificar editais de EXTENSÃO
         if edital_type not in ['extensao', 'resultado']:
             return {
                 "status": "skipped", 
-                "message": f"Edital tipo '{edital_type}' não gera notificação automática",
-                "edital_titulo": edital_titulo
+                "message": f"Edital '{edital_type}' não é de extensão - seguindo lógica scraper.py",
+                "edital_titulo": edital_titulo,
+                "note": "Só editais com 'proex' ou 'extensão' geram notificações"
             }
         
         # Buscar todos os IDs ativos do Telegram
@@ -628,15 +635,19 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
         if not subscribers.data:
             return {"status": "info", "message": "Nenhum usuário cadastrado no Telegram"}
         
-        # Mensagem personalizada por tipo (HTML é mais seguro que Markdown)
+        # Mensagem personalizada por tipo - MELHORADA para seguir scraper/parser
         if edital_type == 'extensao':
             emoji = "🎓"
-            tipo_nome = "EDITAL DE EXTENSÃO"
-            mensagem_extra = "💡 Oportunidade de extensão universitária!"
+            tipo_nome = "NOVO EDITAL DE EXTENSÃO"
+            mensagem_extra = """💡 <b>Oportunidade de Extensão!</b>
+📚 Bolsas para projetos de extensão universitária
+⏰ Verifique prazos de inscrição"""
         elif edital_type == 'resultado':
             emoji = "🏆"
-            tipo_nome = "RESULTADO PUBLICADO"
-            mensagem_extra = "🔍 Confira se você foi aprovado(a)!"
+            tipo_nome = "RESULTADO DIVULGADO"
+            mensagem_extra = """🔍 <b>Confira se foi aprovado(a)!</b>
+📋 Lista de candidatos selecionados
+✅ Veja orientadores e projetos"""
         else:
             emoji = "📋"
             tipo_nome = "NOVO EDITAL"
@@ -654,7 +665,7 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
 
 {mensagem_extra}
 
-💻 <a href="https://seusite.vercel.app">Ver mais bolsas</a>
+💻 <a href="https://bolsasextensao.vercel.app/">Ver todas as bolsas</a>
 
 <i>Para cancelar alertas, digite /stop</i>"""
 

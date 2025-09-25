@@ -85,7 +85,28 @@ export function BolsaDetailsModal({
 
             {/* Status and Views */}
             <div className="flex items-center justify-between">
-              <StatusBadge status={bolsa.status} />
+              <div className="flex items-center gap-3">
+                <StatusBadge status={bolsa.status} />
+                {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO MODAL */}
+                {bolsa.vagas_total && bolsa.vagas_total > 1 && (
+                  <Badge
+                    variant="outline"
+                    className={`text-sm font-semibold ${
+                      bolsa.status === "disponivel"
+                        ? "border-green-500 text-green-700"
+                        : "border-blue-500 text-blue-700"
+                    }`}
+                  >
+                    {bolsa.status === "disponivel"
+                      ? `${
+                          bolsa.vagas_disponiveis || bolsa.vagas_total
+                        } vagas disponíveis`
+                      : `${bolsa.vagas_total} vagas total (${
+                          bolsa.vagas_preenchidas || 0
+                        } preenchidas)`}
+                  </Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Eye className="w-5 h-5" />
                 <span className="text-lg font-medium">{bolsa.view_count}</span>

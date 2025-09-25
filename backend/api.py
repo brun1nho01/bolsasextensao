@@ -83,7 +83,8 @@ def get_bolsas_endpoint(
     """
     Lista as bolsas com filtros e paginação.
     """
-    bolsas_data = db.get_bolsas_paginated(
+    # 🆕 USA NOVO MÉTODO AGRUPADO por padrão
+    bolsas_data = db.get_bolsas_agrupadas_paginated(
         page=page, 
         page_size=page_size, 
         status=status, 

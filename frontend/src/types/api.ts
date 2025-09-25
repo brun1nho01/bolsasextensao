@@ -21,6 +21,10 @@ export interface Bolsa {
   centro: string | null;
   edital_nome: string;
   url_edital: string;
+  // 🆕 CAMPOS PARA AGRUPAMENTO
+  vagas_total?: number; // Total de vagas do grupo
+  vagas_preenchidas?: number; // Quantidade preenchidas
+  vagas_disponiveis?: number; // Quantidade disponíveis
 }
 
 export interface BolsasResponse {
@@ -29,6 +33,7 @@ export interface BolsasResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  agrupadas?: boolean; // 🆕 Indica se são bolsas agrupadas
 }
 
 // A interface Edital foi corrigida para refletir os dados reais do backend.

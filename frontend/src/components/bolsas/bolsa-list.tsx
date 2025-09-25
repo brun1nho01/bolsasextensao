@@ -82,12 +82,31 @@ const BolsaListItem = ({
             <ChevronRight className="w-4 h-4 text-muted-foreground" />
           </div>
 
-          {/* Type badge */}
-          {bolsa.tipo && (
-            <Badge variant="outline" className="w-fit text-xs">
-              {bolsa.tipo}
-            </Badge>
-          )}
+          {/* Type badge and Vagas */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {bolsa.tipo && (
+              <Badge variant="outline" className="w-fit text-xs">
+                {bolsa.tipo}
+              </Badge>
+            )}
+            {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NA LISTA */}
+            {bolsa.vagas_total && bolsa.vagas_total > 1 && (
+              <Badge
+                variant="outline"
+                className={`text-xs font-semibold ${
+                  bolsa.status === "disponivel"
+                    ? "border-green-500 text-green-700"
+                    : "border-blue-500 text-blue-700"
+                }`}
+              >
+                {bolsa.status === "disponivel"
+                  ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
+                  : `${bolsa.vagas_total} vagas (${
+                      bolsa.vagas_preenchidas || 0
+                    } preenchidas)`}
+              </Badge>
+            )}
+          </div>
 
           {/* Deadline warning */}
           {bolsa.status === "disponivel" && dataFim && isFuture(dataFim) && (

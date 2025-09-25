@@ -172,7 +172,7 @@ class UenfParser:
 
 
     def _parse_resultado_com_ia(self, caminho_pdf: str, orientadores_conhecidos: list = None) -> list:
-        print(f"\n--- [DEBUG RESULTADO] Analisando PDF: {os.path.basename(caminho_pdf)} ---", flush=True)
+        # Analisando PDF de resultado
         
         todos_aprovados_final = []
         
@@ -333,7 +333,7 @@ class UenfParser:
         texto_pdf = self._extract_and_clean_text_from_pdf(pdf_path)
         
         # [NOVO DEBUG] Verifica o resultado da extração de texto
-        print(f"  > [DEBUG PARSER] Texto extraído de '{os.path.basename(pdf_path)}'. Comprimento: {len(texto_pdf)} caracteres.")
+        # Texto extraído do PDF
 
         if not texto_pdf or len(texto_pdf) < 100:
             return None
@@ -388,9 +388,7 @@ class UenfParser:
                 resumo_encontrado_no_bloco = match.group(2).strip()
             
             # [DEBUG] Adicionado para imprimir o texto exato enviado para a IA.
-            print("\n--- [DEBUG] INÍCIO DO TEXTO ENVIADO PARA IA (BLOCO) ---")
-            print(texto_para_ia)
-            print("--- [DEBUG] FIM DO TEXTO ENVIADO PARA IA (BLOCO) ---\n")
+            # Enviando bloco de texto para IA
 
             prompt_detalhes_projeto = f"""
                 Sua tarefa é extrair informações de um projeto de edital para um formato JSON ESTRITO E CONSISTENTE.
@@ -442,7 +440,7 @@ class UenfParser:
                         return projetos_finais # Retorna o que conseguiu até agora
                 
                     # [NOVO LOG] Adicionado para depurar a resposta completa da IA
-                    print(f"    [DEBUG IA RAW RESPONSE - Bloco {i+1}/{len(blocos_de_texto)}]\n{response.text}\n---")
+                    # Resposta da IA recebida
 
                     json_text = response.text.strip()
                     if json_text.startswith("```json"):
@@ -588,13 +586,13 @@ class UenfParser:
                 
                 projetos = []
                 # [DEBUG] Adicionado para sabermos que o loop vai começar
-                print(f"    [DEBUG PARSER] Entrando no loop para processar {len(caminhos_pdf_projetos)} PDFs de projeto.", flush=True)
+                # Processando PDFs de projeto
                 for i, item in enumerate(caminhos_pdf_projetos):
                     pdf_path = item['path']
                     centro = item['centro']
                     
                     # [DEBUG] Adicionado para identificar o PDF exato antes de processá-lo
-                    print(f"    [DEBUG PARSER] Processando PDF {i+1}/{len(caminhos_pdf_projetos)}: {os.path.basename(pdf_path)}", flush=True)
+                    # Processando PDF de projeto
                     
                     dados_bolsas = self._parse_bolsas_com_ia(pdf_path)
                     if dados_bolsas:

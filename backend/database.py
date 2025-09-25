@@ -34,7 +34,7 @@ class SupabaseManager:
                         
         try:
             self.client: Client = create_client(url, key)
-            print("Conexão com Supabase estabelecida com sucesso.")
+            # Conexão com Supabase estabelecida
         except Exception as e:
             print(f"Erro ao conectar com Supabase: {e}")
             self.client = None
@@ -85,10 +85,40 @@ class SupabaseManager:
         """Garante que o número do perfil seja uma string com dois dígitos (ex: '1' -> '01')."""
         return str(perfil).strip().zfill(2) if perfil else None
 
+    def _cleanup_old_available_bolsas(self):
+        """
+        🧹 NOVA FUNCIONALIDADE: Remove bolsas 'disponível' de editais antigos 
+        quando um novo edital de inscrição é salvo.
+        """
+        try:
+            # 1. Busca a data do edital mais recente
+            latest_edital = self.client.table('editais').select('data_publicacao').order('data_publicacao', desc=True).limit(1).execute()
+            
+            if not latest_edital.data:
+                return 0  # Não há editais no banco
+            
+            latest_date = latest_edital.data[0]['data_publicacao']
+            
+            # 2. Remove bolsas 'disponível' de editais anteriores ao mais recente
+            cleanup_response = self.client.table('bolsas').delete().eq('status', 'disponivel').neq('edital_data_publicacao', latest_date).execute()
+            
+            deleted_count = len(cleanup_response.data) if cleanup_response.data else 0
+            
+            if deleted_count > 0:
+                print(f"🧹 LIMPEZA: {deleted_count} bolsa(s) não preenchida(s) de editais antigos foram removidas.")
+            
+            return deleted_count
+            
+        except Exception as e:
+            print(f"⚠️ Erro na limpeza de bolsas antigas: {e}")
+            return 0
+
     def upsert_edital(self, edital_data: dict, edital_url: str):
         """
         Insere ou atualiza um edital de forma transacional usando uma função RPC no Supabase.
         A lógica de correspondência fuzzy de projetos é feita em Python antes de enviar os dados.
+        
+        🆕 NOVA FUNCIONALIDADE: Remove automaticamente bolsas não preenchidas de editais antigos.
         """
         if not self.client:
             print("Cliente Supabase não inicializado. Abortando operação.")
@@ -104,7 +134,8 @@ class SupabaseManager:
             projetos_data = edital_data.get('projetos', [])
 
             if not projetos_data:
-                print(f"  > Edital '{edital_data.get('titulo')}' não continha projetos. Apenas o edital será salvo/atualizado.")
+                # Edital sem projetos, salvando apenas edital
+                pass
             else:
                 # Busca todos os projetos existentes para este edital para fazer o match
                 projetos_existentes = []
@@ -127,7 +158,7 @@ class SupabaseManager:
                         matched_key = matches[0]
                         projeto_existente_obj = match_map[matched_key]
                         projeto_id_existente = projeto_existente_obj['id']
-                        print(f"  [DB-MATCH] Projeto '{nome_projeto_db}' corresponde ao projeto existente ID: {projeto_id_existente}")
+                        # Projeto correspondente encontrado no BD
 
                     # Normaliza os detalhes das bolsas
                     bolsas_detalhadas = []
@@ -161,12 +192,37 @@ class SupabaseManager:
             }
 
             # 4. Chama a função RPC com o payload completo
-            print(f"  > Enviando payload para a função RPC 'handle_edital_upsert'...")
             rpc_response = self.client.rpc('handle_edital_upsert', {'edital_payload': payload_final}).execute()
 
             if rpc_response.data:
                 final_edital_id = rpc_response.data
-                print(f"  > Sucesso! Edital '{edital_data.get('titulo')}' e seus projetos foram salvos de forma transacional. ID: {final_edital_id}")
+                # Edital salvo com sucesso
+                
+                # 🧹 LIMPEZA AUTOMÁTICA: Remove bolsas não preenchidas de editais antigos
+                if edital_data.get('etapa') == 'inscricao':  # Só limpa para editais de inscrição
+                    self._cleanup_old_available_bolsas()
+                
+                # 🔔 NOTIFICAÇÕES TELEGRAM - Chama sistema existente do index.py
+                # Segue a mesma lógica do scraper: apenas editais de extensão  
+                try:
+                    from telegram_integration import call_telegram_notifications
+                    
+                    titulo = edital_data.get('titulo', 'Novo Edital')
+                    
+                    # Chama o sistema de notificações existente
+                    notification_result = call_telegram_notifications(
+                        titulo=titulo,
+                        link=edital_url,
+                        tipo="extensao"
+                    )
+                    
+                    print(f"📱 Notificações processadas: {notification_result.get('status', 'unknown')}")
+                        
+                except Exception as e:
+                    print(f"⚠️ Erro ao enviar notificações: {e}")
+                    # Log dos dados para debug
+                    print(f"📱 DADOS: {edital_data.get('titulo')} | {edital_url}")
+                
                 return final_edital_id
             else:
                 # Tenta fornecer um erro mais detalhado, se possível
@@ -181,7 +237,7 @@ class SupabaseManager:
             traceback.print_exc()
             return None
 
-    def atualizar_bolsas_com_resultado(self, aprovados: list):
+    def atualizar_bolsas_com_resultado(self, aprovados: list, edital_url: str = 'https://uenf.br/editais'):
         """
         Atualiza o status das bolsas para 'preenchida' com base nos resultados.
         Lida com orientadores que podem ter múltiplos projetos.
@@ -193,10 +249,8 @@ class SupabaseManager:
         bolsas_atualizadas = 0
 
         # ETAPA 1: Carregar todos os orientadores do DB para correspondência fuzzy
-        print("  [DB-UPDATE] Carregando todos os orientadores do banco de dados para correspondência...", flush=True)
         todos_orientadores_db = self.get_all_orientadores()
         if not todos_orientadores_db:
-            print("  > Aviso: Não foi possível carregar a lista de orientadores. A correspondência de nomes pode falhar.", flush=True)
             return 0 # Aborta se não houver orientadores para comparar
 
         # CRIA UM MAPA ONDE UMA CHAVE NORMALIZADA PODE TER MÚLTIPLAS VARIAÇÕES ORIGINAIS (COM ACENTOS DIFERENTES)
@@ -208,8 +262,7 @@ class SupabaseManager:
 
 
         for aprovado in aprovados:
-            # NOVO DEBUG: Imprime o registro que está sendo processado
-            print(f"\n--- Processando: {aprovado.get('candidato_aprovado')} / {aprovado.get('orientador')} ---", flush=True)
+            # Processando candidato aprovado
             
             orientador_original = aprovado.get('orientador')
             projeto_original = aprovado.get('nome_projeto')
@@ -218,8 +271,7 @@ class SupabaseManager:
             orientador_key_pdf = self._get_match_key(orientador_original)
             projeto_match_key_pdf = self._get_project_match_key(projeto_original)
 
-            # [NOVO DEBUG] Adicionado para ver os dados originais do resultado
-            print(f"  [DB-UPDATE] Tentando match para Chave Orientador: '{orientador_key_pdf}' | Chave Projeto: '{projeto_match_key_pdf}'")
+            # Tentando correspondência de orientador/projeto
 
             if not orientador_original or not projeto_original:
                 continue
@@ -242,19 +294,14 @@ class SupabaseManager:
             # Remove duplicatas se houver
             matches_db_orientadores = list(set(matches_db_orientadores))
 
-            print(f"  [DB-UPDATE] Orientadores com alta similaridade encontrados: {matches_db_orientadores}", flush=True)
+            # Orientadores similares encontrados
 
             try:
                 # ETAPA 3: Busca os projetos de TODOS os orientadores encontrados (usando o nome com acento do DB)
                 response = self.client.table('projetos').select('id, nome_projeto').in_('orientador', matches_db_orientadores).execute()
                 projetos_do_orientador = response.data
                 
-                # [NOVO DEBUG] Adicionado para ver o que o DB retornou
-                print(f"  [DB-UPDATE] Total de projetos encontrados para os orientadores correspondentes: {len(projetos_do_orientador)}")
-                if projetos_do_orientador:
-                    # Imprime os nomes dos projetos encontrados para facilitar a depuração
-                    for p in projetos_do_orientador:
-                        print(f"    - Projeto no DB: '{p.get('nome_projeto')}' (ID: {p.get('id')})")
+                # Projetos encontrados para os orientadores correspondentes
 
                 best_match_project = None
                 
@@ -266,7 +313,7 @@ class SupabaseManager:
                         p_db_match_key = self._get_project_match_key(p_db['nome_projeto'])
                         if p_db_match_key == projeto_match_key_pdf:
                             best_match_project = p_db
-                            print(f"  [DB-UPDATE-MATCH] Sucesso (Camada 1: Match Exato) com '{p_db['nome_projeto']}'")
+                            # Match exato encontrado
                             break
                     
                     # Camada 2: Verificação de Substring (usando chaves de match)
@@ -275,7 +322,7 @@ class SupabaseManager:
                             p_db_match_key = self._get_project_match_key(p_db['nome_projeto'])
                             if projeto_match_key_pdf in p_db_match_key:
                                 best_match_project = p_db
-                                print(f"  [DB-UPDATE-MATCH] Sucesso (Camada 2: Substring) com '{p_db['nome_projeto']}'")
+                                # Match por substring encontrado
                                 break
 
                     # Camada 3: Similaridade de Jaccard (usando chaves de match)
@@ -297,7 +344,7 @@ class SupabaseManager:
                         
                         if highest_score >= 0.6:
                             best_match_project = best_jaccard_match
-                            print(f"  [DB-UPDATE-MATCH] Sucesso (Camada 3: Jaccard Score {highest_score:.2f}) com '{best_match_project['nome_projeto']}'")
+                            # Match por similaridade Jaccard encontrado
 
 
                     # Camada 4: Correspondência "Fuzzy" (usando chaves de match)
@@ -306,7 +353,7 @@ class SupabaseManager:
                         matches = get_close_matches(projeto_match_key_pdf, list(match_map.keys()), n=1, cutoff=0.8)
                         if matches:
                             best_match_project = match_map[matches[0]]
-                            print(f"  [DB-UPDATE-MATCH] Sucesso (Camada 4: Fuzzy) com '{best_match_project['nome_projeto']}'")
+                            # Match fuzzy encontrado
 
                 # 3. Se encontrou um projeto, atualiza a bolsa
                 if best_match_project and best_match_project.get('id'):
@@ -326,7 +373,6 @@ class SupabaseManager:
                         candidatos_existentes_keys = [self._get_match_key(c) for c in candidatos_existentes_db]
                         matches = get_close_matches(candidato_aprovado_key, candidatos_existentes_keys, n=1, cutoff=0.95)
                         if matches:
-                            print(f"  > [DB-UPDATE] Candidato com chave '{candidato_aprovado_key}' já consta como aprovado para este projeto. Pulando para evitar duplicatas.", flush=True)
                             continue # Pula para o próximo aprovado da lista
                     
                     # --- CORREÇÃO FINAL: Lógica de SELECT-THEN-UPDATE ---
@@ -386,6 +432,33 @@ class SupabaseManager:
                 print(f"  > Erro ao atualizar bolsa para o candidato '{aprovado.get('candidato_aprovado')}': {e}", flush=True)
         
         print(f"  > {bolsas_atualizadas} bolsas foram atualizadas para 'preenchida'.", flush=True)
+        
+        # 🔔 NOTIFICAÇÕES TELEGRAM DE RESULTADO - Chama sistema existente  
+        # Segue a mesma lógica do scraper: apenas editais de extensão
+        if bolsas_atualizadas > 0:
+            try:
+                from telegram_integration import call_telegram_notifications
+                
+                # Criar título baseado nos aprovados
+                orientadores = list(set([a.get('orientador', '') for a in aprovados if a.get('orientador')]))
+                titulo_resultado = f"Resultado PROEX - {bolsas_atualizadas} bolsa(s) preenchida(s)"
+                
+                if orientadores and len(orientadores) <= 3:
+                    titulo_resultado += f" - {', '.join(orientadores[:3])}"
+                
+                # Chama o sistema de notificações existente
+                notification_result = call_telegram_notifications(
+                    titulo=titulo_resultado,
+                    link=edital_url,
+                    tipo="resultado"
+                )
+                
+                print(f"📱 Notificações de resultado: {notification_result.get('status', 'processadas')}")
+                    
+            except Exception as e:
+                print(f"⚠️ Erro ao enviar notificações de resultado: {e}")
+                print(f"📱 DADOS: {bolsas_atualizadas} bolsa(s) | {edital_url}")
+        
         return bolsas_atualizadas
 
     def get_all_orientadores(self) -> list:
@@ -400,9 +473,86 @@ class SupabaseManager:
             print(f"  > Erro ao buscar lista de orientadores: {e}")
             return []
 
+    def get_bolsas_agrupadas_paginated(self, page: int = 1, page_size: int = 10, status: Optional[str] = None, centro: Optional[str] = None, tipo: Optional[str] = None, q: Optional[str] = None, sort: str = 'created_at', order: str = 'desc'):
+        """
+        🆕 NOVA FUNCIONALIDADE: Busca bolsas AGRUPADAS (mesmo projeto + perfil = 1 card com quantidade)
+        """
+        try:
+            offset = (page - 1) * page_size
+            
+            # Query para bolsas agrupadas - soma vagas iguais
+            query = self.client.table('bolsas_view_agrupada').select('*', count='exact')
+
+            if status and status != 'all':
+                query = query.eq('status', status)
+            
+            if centro and centro != 'all':
+                query = query.eq('centro', centro)
+
+            if tipo and tipo != 'all':
+                if tipo == 'extensao':
+                    # Busca por qualquer tipo que contenha 'Extensão' OU 'Discente'
+                    query = query.or_('tipo.ilike.%Extensão%,tipo.ilike.%Discente%')
+                elif tipo == 'UA Superior':
+                    # Busca por (UA ou Universidade Aberta) E Superior
+                    # Encadeamento de .or_() com .ilike() funciona como AND
+                    query = query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Superior%')
+                elif tipo == 'UA Médio':
+                    # Busca por (UA ou Universidade Aberta) E (Médio ou Nível Médio)
+                    # A biblioteca não tem um método .and_(), então construímos o filtro manualmente.
+                    # Para respeitar a imutabilidade, criamos um novo objeto de parâmetros com .set()
+                    # e o reatribuímos ao construtor da query.
+                    filter_string = 'or(tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%),or(tipo.ilike.%Médio%,tipo.ilike.%Nível Médio%)'
+                    query.params = query.params.set('and', f'({filter_string})')
+                elif tipo == 'UA Fundamental':
+                    # Busca por (UA ou Universidade Aberta) E Fundamental
+                    query = query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Fundamental%')
+            
+            if q:
+                # Normaliza a query do usuário para ser sem acentos antes de passar para o FTS
+                q_normalized = self._get_match_key(q)
+                search_terms = q_normalized.split()
+                search_query = " & ".join([f"{term}:*" for term in search_terms])
+                query = query.filter('fts', 'fts(portuguese)', search_query)
+
+            # Define quais ordenações anulam a prioridade de "disponível"
+            sort_overrides_status = ['view_count', 'orientador'] # Mantido, se necessário
+            
+            # ORDENAÇÃO PRIMÁRIA: Sempre pela ordem customizada de status
+            query = query.order('status_order', desc=False)
+
+            # ORDENAÇÃO SECUNDÁRIA: A escolhida pelo usuário
+            if sort and order:
+                is_descending = order.lower() == "desc"
+                query = query.order(sort, desc=is_descending)
+
+            # Paginação
+            start_idx = (page - 1) * page_size
+            end_idx = start_idx + page_size - 1
+            query = query.range(start_idx, end_idx)
+            
+            response = query.execute()
+            
+            bolsas = response.data
+            total_count = response.count if response.count is not None else 0
+            total_pages = (total_count + page_size - 1) // page_size
+
+            return {
+                "bolsas": bolsas,
+                "total": total_count,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+                "agrupadas": True  # Indica que são bolsas agrupadas
+            }
+        except Exception as e:
+            print(f"  > Erro ao buscar bolsas agrupadas: {e}")
+            # Fallback para método não-agrupado se der erro
+            return self.get_bolsas_paginated(page, page_size, status, centro, tipo, q, sort, order)
+
     def get_bolsas_paginated(self, page: int = 1, page_size: int = 10, status: Optional[str] = None, centro: Optional[str] = None, tipo: Optional[str] = None, q: Optional[str] = None, sort: str = 'created_at', order: str = 'desc'):
         """
-        Busca bolsas no banco de dados com filtros, paginação e ordenação, retornando também o total.
+        Método ORIGINAL mantido como fallback - busca bolsas individuais.
         """
         try:
             offset = (page - 1) * page_size
@@ -469,7 +619,8 @@ class SupabaseManager:
                 "total": total_count,
                 "page": page,
                 "page_size": page_size,
-                "total_pages": total_pages
+                "total_pages": total_pages,
+                "agrupadas": False  # Indica que são bolsas individuais
             }
         except Exception as e:
             print(f"  > Erro ao buscar bolsas paginadas: {e}")
@@ -478,7 +629,8 @@ class SupabaseManager:
                 "total": 0,
                 "page": page,
                 "page_size": page_size,
-                "total_pages": 0
+                "total_pages": 0,
+                "agrupadas": False
             }
 
     def get_bolsa(self, bolsa_id: str):
@@ -576,7 +728,6 @@ class SupabaseManager:
         """Atualiza o timestamp da última atualização de dados."""
         try:
             self.client.table('metadata').update({'value': timestamp}).eq('key', 'last_data_update').execute()
-            print(f"  > Timestamp de 'last_data_update' atualizado para: {timestamp}")
         except Exception as e:
             print(f"  > Erro ao atualizar o timestamp de last_data_update: {e}")
 

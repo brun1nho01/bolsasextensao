@@ -192,13 +192,11 @@ class UenfScraper:
                 latest_date_in_db = datetime.strptime(latest_date_in_db_str, '%Y-%m-%d').date()
                 print(f"Última data de publicação no banco: {latest_date_in_db.strftime('%d/%m/%Y')}")
 
-            # [DEBUG] Adicionado para rastrear a busca da lista de editais
-            print("    [DEBUG] scraper.py: Buscando a lista de editais em: " + self.scrape_url, flush=True)
             response = self._make_request_with_retry(self.scrape_url)
             if not response:
                 print(f"  > Falha ao buscar a página de editais {self.scrape_url}. Pulando para a próxima.")
                 return 0
-            print("    [DEBUG] scraper.py: Lista de editais obtida com sucesso.", flush=True)
+            # Lista de editais obtida com sucesso
 
         except requests.RequestException as e:
             print(f"Erro ao buscar a página de editais: {e}")
@@ -233,8 +231,6 @@ class UenfScraper:
 
             edital_url = link_tag['href']
             
-            # [DEBUG] Adicionado para rastrear o download de PDFs
-            print(f"    [DEBUG] scraper.py: Edital qualificado. Iniciando download de PDFs de {edital_url}", flush=True)
             caminho_pdf_principal, caminhos_pdf_projetos, data_publicacao_str = self._download_pdfs_to_temp_files(edital_url, is_resultado)
             data_publicacao = self._parse_publication_date(data_publicacao_str)
             
@@ -245,8 +241,7 @@ class UenfScraper:
                     print(f"  > Ignorando edital '{titulo}' (publicado em {data_publicacao_obj.strftime('%d/%m/%Y')}) pois é anterior ou igual ao último já salvo.")
                     continue # Pula para o próximo edital da lista
             
-            print(f"    [DEBUG] scraper.py: Data de publicação encontrada: {data_publicacao or 'N/A'}", flush=True)
-            print(f"    [DEBUG] scraper.py: Download de PDFs concluído. Principal: {'SIM' if caminho_pdf_principal else 'NÃO'}, Projetos: {len(caminhos_pdf_projetos)}", flush=True)
+            # Download de PDFs concluído
             
             all_files_paths = ([caminho_pdf_principal] if caminho_pdf_principal else []) + [item['path'] for item in caminhos_pdf_projetos]
             
@@ -259,19 +254,14 @@ class UenfScraper:
                     continue
                 
                 if is_inscricao and caminho_pdf_principal and caminhos_pdf_projetos:
-                    # [DEBUG] Adicionado para rastrear a chamada ao parser
-                    print(f"    [DEBUG] scraper.py: Chamando o parser para edital de INSCRIÇÃO.", flush=True)
                     dados_edital = self.parser.parse_noticia(
                         titulo, 
                         caminho_pdf_principal, 
                         caminhos_pdf_projetos,
                         data_publicacao=data_publicacao
                     )
-                    print(f"    [DEBUG] scraper.py: Parser retornou. Verificando dados...", flush=True)
                     if dados_edital and dados_edital.get('projetos'):
-                        print(f"    [DEBUG] scraper.py: Chamando o db_manager.upsert_edital().", flush=True)
                         self.db_manager.upsert_edital(dados_edital, edital_url)
-                        print(f"    [DEBUG] scraper.py: db_manager.upsert_edital() CONCLUÍDO.", flush=True)
                         novos_editais_processados += 1
 
                 elif is_resultado and caminhos_pdf_projetos:
@@ -279,8 +269,6 @@ class UenfScraper:
                     if not lista_orientadores:
                         print("  > Aviso: Nenhum orientador no banco de dados para usar como referência...")
                     
-                    # [DEBUG] Adicionado para rastrear a chamada ao parser
-                    print(f"    [DEBUG] scraper.py: Chamando o parser para edital de RESULTADO.", flush=True)
                     dados_resultado = self.parser.parse_noticia(
                         titulo, 
                         caminho_pdf_principal,
@@ -288,11 +276,8 @@ class UenfScraper:
                         orientadores_conhecidos=lista_orientadores,
                         data_publicacao=data_publicacao
                     )
-                    print(f"    [DEBUG] scraper.py: Parser retornou. Verificando dados...", flush=True)
                     if dados_resultado and dados_resultado.get('aprovados'):
-                        print(f"    [DEBUG] scraper.py: Chamando o db_manager.atualizar_bolsas_com_resultado().", flush=True)
                         self.db_manager.atualizar_bolsas_com_resultado(dados_resultado['aprovados'])
-                        print(f"    [DEBUG] scraper.py: db_manager.atualizar_bolsas_com_resultado() CONCLUÍDO.", flush=True)
                         novos_editais_processados += 1
 
             except Exception as e:
