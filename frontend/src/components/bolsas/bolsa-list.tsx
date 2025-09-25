@@ -95,17 +95,20 @@ const BolsaListItem = ({
                 Perfil {bolsa.numero_perfil}
               </Badge>
             )}
-            {/* Quantidade de vagas como texto simples */}
-            <span
+            {/* Badge de quantidade de vagas */}
+            <Badge
+              variant="outline"
               className={`text-xs font-medium ${
-                bolsa.status === "disponivel" || bolsa.status === "aberta"
-                  ? "text-green-700"
-                  : "text-blue-700"
+                bolsa.status === "disponivel"
+                  ? "border-green-500 text-green-700"
+                  : bolsa.status === "aberta"
+                  ? "border-blue-500 text-blue-700"
+                  : "border-red-500 text-red-700"
               }`}
             >
               {bolsa.vagas_total || 1}{" "}
               {(bolsa.vagas_total || 1) === 1 ? "vaga" : "vagas"}
-            </span>
+            </Badge>
           </div>
 
           {/* Deadline warning */}
