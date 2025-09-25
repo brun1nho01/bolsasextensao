@@ -90,22 +90,20 @@ const BolsaListItem = ({
               </Badge>
             )}
             {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NA LISTA */}
-            {bolsa.vagas_total && bolsa.vagas_total > 1 && (
-              <Badge
-                variant="outline"
-                className={`text-xs font-semibold ${
-                  bolsa.status === "disponivel"
-                    ? "border-green-500 text-green-700"
-                    : "border-blue-500 text-blue-700"
-                }`}
-              >
-                {bolsa.status === "disponivel"
-                  ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
-                  : `${bolsa.vagas_total} vagas (${
-                      bolsa.vagas_preenchidas || 0
-                    } preenchidas)`}
-              </Badge>
-            )}
+            <Badge
+              variant="outline"
+              className={`text-xs font-semibold ${
+                bolsa.status === "disponivel"
+                  ? "border-green-500 text-green-700"
+                  : "border-blue-500 text-blue-700"
+              }`}
+            >
+              {bolsa.status === "disponivel"
+                ? `${bolsa.vagas_disponiveis || bolsa.vagas_total || 1} vagas`
+                : `${bolsa.vagas_total || 1} vagas (${
+                    bolsa.vagas_preenchidas || 0
+                  } preenchidas)`}
+            </Badge>
           </div>
 
           {/* Deadline warning */}

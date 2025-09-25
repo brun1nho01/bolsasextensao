@@ -39,20 +39,6 @@ interface BolsaCardProps {
 
 export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
   const { isMobile, isTablet, isDesktop } = useDeviceType();
-
-  // 🐛 DEBUG: Log para verificar dados das vagas
-  if (
-    bolsa.nome_projeto.includes("CAMINHOS DE BARRO") ||
-    bolsa.nome_projeto.includes("FATORES SOCIOECONÔMICOS")
-  ) {
-    console.log(`🔍 DEBUG ${bolsa.nome_projeto.substring(0, 30)}:`, {
-      vagas_total: bolsa.vagas_total,
-      vagas_disponiveis: bolsa.vagas_disponiveis,
-      vagas_preenchidas: bolsa.vagas_preenchidas,
-      tipo: bolsa.tipo,
-      status: bolsa.status,
-    });
-  }
   const displayDateStr = bolsa.data_publicacao || bolsa.created_at;
   const displayDate = parseDateAsLocal(displayDateStr);
   const dataFim = parseDateAsLocal(bolsa.data_fim_inscricao);
@@ -100,20 +86,18 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
               {bolsa.tipo}
             </Badge>
             {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO MOBILE */}
-            {bolsa.vagas_total && bolsa.vagas_total > 1 && (
-              <Badge
-                variant="outline"
-                className={`text-xs font-semibold ${
-                  bolsa.status === "disponivel"
-                    ? "border-green-500 text-green-700"
-                    : "border-blue-500 text-blue-700"
-                }`}
-              >
-                {bolsa.status === "disponivel"
-                  ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
-                  : `${bolsa.vagas_total} vagas`}
-              </Badge>
-            )}
+            <Badge
+              variant="outline"
+              className={`text-xs font-semibold ${
+                bolsa.status === "disponivel"
+                  ? "border-green-500 text-green-700"
+                  : "border-blue-500 text-blue-700"
+              }`}
+            >
+              {bolsa.status === "disponivel"
+                ? `${bolsa.vagas_disponiveis || bolsa.vagas_total || 1} vagas`
+                : `${bolsa.vagas_total || 1} vagas`}
+            </Badge>
           </div>
 
           {/* Orientador */}
@@ -212,22 +196,22 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
               <div className="flex items-center gap-2">
                 <StatusBadge status={bolsa.status} />
                 {/* 🆕 MOSTRA QUANTIDADE DE VAGAS NO CARD */}
-                {bolsa.vagas_total && bolsa.vagas_total > 1 && (
-                  <Badge
-                    variant="outline"
-                    className={`text-xs font-semibold ${
-                      bolsa.status === "disponivel"
-                        ? "border-green-500 text-green-700"
-                        : "border-blue-500 text-blue-700"
-                    }`}
-                  >
-                    {bolsa.status === "disponivel"
-                      ? `${bolsa.vagas_disponiveis || bolsa.vagas_total} vagas`
-                      : `${bolsa.vagas_total} vagas (${
-                          bolsa.vagas_preenchidas || 0
-                        } preenchidas)`}
-                  </Badge>
-                )}
+                <Badge
+                  variant="outline"
+                  className={`text-xs font-semibold ${
+                    bolsa.status === "disponivel"
+                      ? "border-green-500 text-green-700"
+                      : "border-blue-500 text-blue-700"
+                  }`}
+                >
+                  {bolsa.status === "disponivel"
+                    ? `${
+                        bolsa.vagas_disponiveis || bolsa.vagas_total || 1
+                      } vagas`
+                    : `${bolsa.vagas_total || 1} vagas (${
+                        bolsa.vagas_preenchidas || 0
+                      } preenchidas)`}
+                </Badge>
               </div>
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Eye className="w-4 h-4" />

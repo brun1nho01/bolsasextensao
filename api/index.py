@@ -59,8 +59,8 @@ def get_bolsas_from_supabase(params):
         page_size = min(page_size, 100)  # Limita a 100
         offset = (page - 1) * page_size
         
-        # Query base com contagem total
-        query = supabase.table('bolsas_view').select('*', count='exact')
+        # Query base com contagem total - USANDO VIEW AGRUPADA
+        query = supabase.table('bolsas_view_agrupada').select('*', count='exact')
         
         # Filtros
         status = params.get('status', [None])[0]
@@ -116,7 +116,8 @@ def get_bolsas_from_supabase(params):
                 "total": total_count,
                 "page": page,
                 "page_size": page_size,
-                "total_pages": total_pages
+                "total_pages": total_pages,
+                "agrupadas": True  # Indica que são bolsas agrupadas
             }
         
         return None
