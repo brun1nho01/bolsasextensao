@@ -537,14 +537,50 @@ class SupabaseManager:
             total_count = response.count if response.count is not None else 0
             total_pages = (total_count + page_size - 1) // page_size
 
-            # 🆕 Calcular totais de vagas para os dados da página atual
-            total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in bolsas)
-            
-            # 🆕 Calcular vagas preenchidas (somar vagas_total das bolsas com status preenchida)
-            vagas_preenchidas = sum(
-                bolsa.get('vagas_total', 1) for bolsa in bolsas 
-                if bolsa.get('status') == 'preenchida'
-            )
+            # 🔧 CALCULAR TOTAIS COM TODOS OS DADOS (não só da página atual)
+            try:
+                # Query separada para calcular totais gerais  
+                all_query = self.client.table('bolsas_view_agrupada').select('vagas_total,status')
+                
+                # Aplicar os mesmos filtros da query principal
+                if status and status != 'all':
+                    all_query = all_query.eq('status', status)
+                if centro and centro != 'all':
+                    all_query = all_query.eq('centro', centro)  
+                if tipo and tipo != 'all':
+                    if tipo == 'extensao':
+                        all_query = all_query.or_('tipo.ilike.%Extensão%,tipo.ilike.%Discente%')
+                    elif tipo == 'UA Superior':
+                        all_query = all_query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Superior%')
+                    elif tipo == 'UA Médio':
+                        filter_string = 'or(tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%),or(tipo.ilike.%Médio%,tipo.ilike.%Nível Médio%)'
+                        all_query.params = all_query.params.set('and', f'({filter_string})')
+                    elif tipo == 'UA Fundamental':
+                        all_query = all_query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Fundamental%')
+                if q:
+                    q_normalized = self._get_match_key(q)
+                    search_terms = q_normalized.split()
+                    search_query = " & ".join([f"{term}:*" for term in search_terms])
+                    all_query = all_query.filter('fts', 'fts(portuguese)', search_query)
+                
+                all_response = all_query.execute()
+                all_bolsas = all_response.data or []
+                
+                # Calcular totais com TODOS os dados filtrados
+                total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in all_bolsas)
+                vagas_preenchidas = sum(
+                    bolsa.get('vagas_total', 1) for bolsa in all_bolsas 
+                    if bolsa.get('status') == 'preenchida'
+                )
+                
+            except Exception as calc_error:
+                print(f"⚠️ Erro ao calcular totais Python: {calc_error}")
+                # Fallback: calcular só com dados da página
+                total_vagas = sum(bolsa.get('vagas_total', 1) for bolsa in bolsas)
+                vagas_preenchidas = sum(
+                    bolsa.get('vagas_total', 1) for bolsa in bolsas 
+                    if bolsa.get('status') == 'preenchida'
+                )
 
             return {
                 "bolsas": bolsas,
@@ -553,8 +589,8 @@ class SupabaseManager:
                 "page_size": page_size,
                 "total_pages": total_pages,
                 "agrupadas": True,  # Indica que são bolsas agrupadas
-                "total_vagas": total_vagas,  # 🆕 Total de vagas (soma)
-                "vagas_preenchidas": vagas_preenchidas  # 🆕 Vagas preenchidas (soma)
+                "total_vagas": total_vagas,  # 🆕 Total de vagas (soma de TODOS os dados)
+                "vagas_preenchidas": vagas_preenchidas  # 🆕 Vagas preenchidas (soma de TODOS os dados)
             }
         except Exception as e:
             print(f"  > Erro ao buscar bolsas agrupadas: {e}")
