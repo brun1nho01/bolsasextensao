@@ -105,10 +105,10 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
       </motion.div>
 
       {/* Podium */}
-      <div className="relative">
+      <div className="relative mt-4 sm:mt-0">
         <div
           ref={scrollContainerRef}
-          className={`flex items-end gap-2 sm:gap-4 mb-8 pb-4 px-4 scroll-smooth ${
+          className={`flex items-end gap-2 sm:gap-4 mb-8 pt-6 pb-4 px-4 scroll-smooth ${
             needsScroll
               ? "justify-start overflow-x-auto"
               : "justify-center overflow-x-visible"
@@ -156,7 +156,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
                   } ${cardHeightClass} relative flex flex-col cursor-pointer group`}
                   hoverable={true}
                 >
-                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-10">
+                  <div className="absolute -top-2 left-1/2 transform -translate-x-1/2 z-10">
                     <Badge
                       className={`${
                         position === 1
@@ -174,7 +174,7 @@ export function RankingPodium({ topBolsas, onBolsaClick }: RankingPodiumProps) {
                   <GlassCardHeader
                     title={formatProjectTitle(bolsa.nome_projeto)}
                     description={formatPersonName(bolsa.orientador)}
-                    className="pt-6"
+                    className="pt-5"
                     titleClassName="line-clamp-3"
                   />
                   <GlassCardContent className="flex flex-col flex-grow p-6 pt-3">

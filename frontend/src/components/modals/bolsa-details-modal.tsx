@@ -90,12 +90,12 @@ export function BolsaDetailsModal({
                 {/* Badge de quantidade de vagas - primeiro */}
                 <Badge
                   variant="outline"
-                  className={`text-sm font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm ${
+                  className={`text-sm font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm text-white ${
                     bolsa.status === "disponivel"
-                      ? "bg-success/10 text-white border-success/20"
+                      ? "bg-success/10 border-success/20"
                       : bolsa.status === "aberta"
-                      ? "bg-info/10 text-white border-info/20"
-                      : "bg-danger/10 text-white border-danger/20"
+                      ? "bg-info/10 border-info/20"
+                      : "bg-danger/10 border-danger/20"
                   }`}
                 >
                   {bolsa.vagas_total || 1}{" "}
