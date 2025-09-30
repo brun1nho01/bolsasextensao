@@ -157,7 +157,7 @@ const BolsaListItem = ({
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {bolsa.status === "disponivel" && dataFim && isFuture(dataFim) && (
+            {bolsa.status === "aberta" && dataFim && isFuture(dataFim) && (
               <div className="flex items-center gap-1.5 text-xs font-medium">
                 <Clock className="w-3 h-3 text-danger" />
                 <span className="text-danger">

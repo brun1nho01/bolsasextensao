@@ -9,6 +9,7 @@ import {
   ExternalLink,
   DollarSign,
   Clock,
+  CheckCircle,
 } from "lucide-react";
 import { format, formatDistanceToNow, isFuture } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -258,6 +259,31 @@ export function BolsaDetailsModal({
                     </p>
                     <p className="text-success text-sm font-medium">
                       ✓ Selecionado para a bolsa
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {/* Requisitos da Bolsa */}
+          {bolsa.requisito && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.25 }}
+              className="space-y-3"
+            >
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <CheckCircle className="w-5 h-5 text-info" />
+                Requisitos da Bolsa
+              </h3>
+              <div className="glass-card p-6 border border-info/20 bg-info/5">
+                <div className="relative">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-info rounded-full" />
+                  <div className="pl-6">
+                    <p className="text-foreground leading-relaxed text-justify text-base whitespace-pre-line">
+                      {bolsa.requisito}
                     </p>
                   </div>
                 </div>

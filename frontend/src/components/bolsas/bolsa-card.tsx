@@ -90,10 +90,12 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
               variant="outline"
               className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm text-white ${
                 bolsa.status === "disponivel"
-                  ? "bg-success/10 border-success/20"
+                  ? "bg-info/10 border-info/20" // Azul
                   : bolsa.status === "aberta"
-                  ? "bg-info/10 border-info/20"
-                  : "bg-danger/10 border-danger/20"
+                  ? "bg-success/10 border-success/20" // Verde
+                  : bolsa.status === "aguardando"
+                  ? "bg-warning/10 border-warning/20" // Amarela
+                  : "bg-danger/10 border-danger/20" // Vermelha (preenchida)
               }`}
             >
               {bolsa.vagas_total || 1}{" "}
