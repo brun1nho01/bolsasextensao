@@ -8,6 +8,7 @@ import {
   EditaisResponse,
   Metadata,
 } from "@/types/api";
+import { useViewSession } from "./useViewSession";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -66,12 +67,96 @@ export const useBolsas = (filters: FilterParams = {}) => {
   });
 };
 
-// Fetch single bolsa details
+// Fetch single bolsa details WITHOUT incrementing view count
+export const useBolsaData = (id: string) => {
+  return useQuery<Bolsa, Error>({
+    queryKey: ["bolsa-data", id],
+    queryFn: () => apiFetcher<Bolsa>(`/api/bolsas/${id}?increment_view=false`),
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+};
+
+// Increment view count for a bolsa (only if not viewed in this session)
+export const useIncrementBolsaView = () => {
+  return useMutation({
+    mutationFn: async ({
+      bolsaId,
+      sessionId,
+    }: {
+      bolsaId: string;
+      sessionId: string;
+    }) => {
+      const response = await fetch(
+        `${API_BASE_URL}/api/bolsas/${bolsaId}/increment-view`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ session_id: sessionId }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error("Failed to increment view");
+      }
+      return response.json();
+    },
+  });
+};
+
+// Fetch single bolsa details WITH session-aware view tracking
 export const useBolsa = (id: string) => {
+  const { sessionId, hasViewedBolsa, markBolsaAsViewed } = useViewSession();
+  const incrementViewMutation = useIncrementBolsaView();
+
   return useQuery<Bolsa, Error>({
     queryKey: ["bolsa", id],
-    queryFn: () => apiFetcher<Bolsa>(`/api/bolsas/${id}`),
-    enabled: !!id, // A query só será executada se o ID existir
+    queryFn: async () => {
+      // Primeiro, busca os dados da bolsa sem incrementar views
+      const bolsa = await apiFetcher<Bolsa>(
+        `/api/bolsas/${id}?increment_view=false`
+      );
+
+      // Verifica se já foi vista nesta sessão
+      if (!hasViewedBolsa(id)) {
+        // Primeira vez que vê nesta sessão - incrementa view
+        try {
+          await incrementViewMutation.mutateAsync({ bolsaId: id, sessionId });
+          markBolsaAsViewed(id);
+
+          // Atualiza o contador local para UI responsiva
+          bolsa.view_count = (bolsa.view_count || 0) + 1;
+
+          // View incrementada com sucesso
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `📊 View incrementada para bolsa ${id} (sessão: ${sessionId.slice(
+                0,
+                8
+              )}...)`
+            );
+          }
+        } catch (error) {
+          if (process.env.NODE_ENV === "development") {
+            console.warn("Erro ao incrementar view:", error);
+          }
+          // Marca como vista mesmo se falhou, para não ficar tentando
+          markBolsaAsViewed(id);
+        }
+      } else {
+        if (process.env.NODE_ENV === "development") {
+          console.log(
+            `👁️ Bolsa ${id} já foi vista nesta sessão - não incrementando`
+          );
+        }
+      }
+
+      return bolsa;
+    },
+    enabled: !!id,
+    staleTime: 30 * 1000, // 30 seconds - menor cache para refletir mudanças de view
+    retry: 1, // Reduz tentativas para não inflar views
   });
 };
 

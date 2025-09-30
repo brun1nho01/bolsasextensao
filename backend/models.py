@@ -30,6 +30,7 @@ class BolsaComProjeto(BaseModel):
     created_at: datetime
     data_publicacao: Optional[date] = None
     data_fim_inscricao: Optional[date] = None
+    data_divulgacao_resultado: Optional[date] = None  # NOVO CAMPO
     candidato_aprovado: Optional[str] = None
     view_count: int
     remuneracao: Optional[float] = None
@@ -69,6 +70,7 @@ class Edital(BaseModel):
     link: str
     data_fim_inscricao: Optional[date] = None
     data_publicacao: Optional[date] = None
+    data_divulgacao_resultado: Optional[date] = None  # NOVO CAMPO
     created_at: datetime
 
     class Config:

@@ -194,7 +194,7 @@ def get_ranking_from_supabase(params):
         print(f"Erro ao buscar ranking: {e}")
         return None
 
-def get_bolsa_by_id(bolsa_id):
+def get_bolsa_by_id(bolsa_id, increment_view=True):
     """Busca uma bolsa específica por ID do Supabase"""
     supabase = get_supabase_client()
     if not supabase:
@@ -205,36 +205,79 @@ def get_bolsa_by_id(bolsa_id):
         response = supabase.table('bolsas_view').select('*').eq('id', bolsa_id).execute()
         
         if response.data and len(response.data) > 0:
-            # Incrementar contador - SUPER SIMPLES
-            try:
-                print(f"🔢 INCREMENTANDO VIEW para bolsa {bolsa_id}")
-                
-                # Pegar o valor atual direto da view que já temos
-                bolsa_data = response.data[0]
-                current_count = bolsa_data.get('view_count', 0) or 0
-                new_count = current_count + 1
-                
-                print(f"📊 Mudando de {current_count} para {new_count}")
-                
-                # Atualizar na tabela bolsas de forma simples
-                supabase.table('bolsas').update({'view_count': new_count}).eq('id', bolsa_id).execute()
-                
-                # Atualizar o dado que vamos retornar também
-                bolsa_data['view_count'] = new_count
-                
-                print(f"✅ SUCESSO: View count = {new_count}")
-                
-            except Exception as e:
-                print(f"❌ ERRO: {str(e)}")
-                # Se der erro, continua sem incrementar
+            bolsa_data = response.data[0]
             
-            return response.data[0]
+            # Incrementar contador apenas se solicitado
+            if increment_view:
+                try:
+                    print(f"🔢 INCREMENTANDO VIEW para bolsa {bolsa_id}")
+                    
+                    # Pegar o valor atual direto da view que já temos
+                    current_count = bolsa_data.get('view_count', 0) or 0
+                    new_count = current_count + 1
+                    
+                    print(f"📊 Mudando de {current_count} para {new_count}")
+                    
+                    # Atualizar na tabela bolsas de forma simples
+                    supabase.table('bolsas').update({'view_count': new_count}).eq('id', bolsa_id).execute()
+                    
+                    # Atualizar o dado que vamos retornar também
+                    bolsa_data['view_count'] = new_count
+                    
+                    print(f"✅ SUCESSO: View count = {new_count}")
+                    
+                except Exception as e:
+                    print(f"❌ ERRO: {str(e)}")
+                    # Se der erro, continua sem incrementar
+            else:
+                print(f"👁️ BUSCANDO bolsa {bolsa_id} SEM incrementar view (increment_view=False)")
+            
+            return bolsa_data
         
         return None
         
     except Exception as e:
         print(f"Erro ao buscar bolsa por ID: {e}")
         return None
+
+def increment_bolsa_view_with_session(bolsa_id, session_id):
+    """Incrementa view de uma bolsa com controle de sessão"""
+    supabase = get_supabase_client()
+    if not supabase:
+        return {"status": "error", "message": "Supabase não disponível"}
+    
+    try:
+        print(f"🎯 INCREMENT VIEW com sessão - Bolsa: {bolsa_id}, Sessão: {session_id[:8]}...")
+        
+        # Busca a bolsa atual
+        response = supabase.table('bolsas_view').select('view_count').eq('id', bolsa_id).execute()
+        
+        if not response.data:
+            return {"status": "error", "message": "Bolsa não encontrada"}
+        
+        current_count = response.data[0].get('view_count', 0) or 0
+        new_count = current_count + 1
+        
+        # Incrementa na tabela bolsas
+        update_response = supabase.table('bolsas').update({
+            'view_count': new_count
+        }).eq('id', bolsa_id).execute()
+        
+        if update_response.data:
+            print(f"✅ View incrementada: {current_count} → {new_count} (Sessão: {session_id[:8]}...)")
+            return {
+                "status": "success", 
+                "bolsa_id": bolsa_id,
+                "session_id": session_id,
+                "old_count": current_count,
+                "new_count": new_count
+            }
+        else:
+            return {"status": "error", "message": "Falha ao atualizar contador"}
+        
+    except Exception as e:
+        print(f"❌ Erro ao incrementar view: {e}")
+        return {"status": "error", "message": str(e)}
 
 def get_editais_from_supabase(params):
     """Busca editais do Supabase com paginação"""
@@ -944,12 +987,17 @@ class handler(BaseHTTPRequestHandler):
             # Endpoint individual: GET /api/bolsas/{id}
             bolsa_id = path.split('/')[3]
             
+            # Verifica se deve incrementar view (padrão: True, a menos que increment_view=false)
+            increment_view_param = query_params.get('increment_view', ['true'])[0]
+            increment_view = increment_view_param.lower() != 'false'
+            
             # Tentar buscar bolsa específica do Supabase
-            bolsa_data = get_bolsa_by_id(bolsa_id)
+            bolsa_data = get_bolsa_by_id(bolsa_id, increment_view=increment_view)
             
             if bolsa_data:
-                # Dados reais do Supabase - SEM CACHE para debug
-                return self.send_json_response(bolsa_data, cache_seconds=0)
+                # Dados reais do Supabase
+                cache_time = 0 if increment_view else 300  # Sem cache se incrementou view
+                return self.send_json_response(bolsa_data, cache_seconds=cache_time)
             else:
                 # Bolsa não encontrada
                 response = {
@@ -1564,6 +1612,30 @@ class handler(BaseHTTPRequestHandler):
                 response = {"error": f"Erro ao listar usuários: {str(e)}", "total": 0}
                 return self.send_json_response(response, status_code=500, cache_seconds=0)
             
+        elif path.startswith('/api/bolsas/') and path.endswith('/increment-view'):
+            # Endpoint para incrementar view: POST /api/bolsas/{id}/increment-view
+            try:
+                path_parts = path.split('/')
+                if len(path_parts) >= 4:
+                    bolsa_id = path_parts[3]
+                    session_id = data.get('session_id', '')
+                    
+                    if not session_id:
+                        response = {"status": "error", "message": "session_id é obrigatório"}
+                        return self.send_json_response(response, status_code=400, cache_seconds=0)
+                    
+                    result = increment_bolsa_view_with_session(bolsa_id, session_id)
+                    
+                    status_code = 200 if result.get("status") == "success" else 400
+                    return self.send_json_response(result, status_code=status_code, cache_seconds=0)
+                else:
+                    response = {"status": "error", "message": "URL inválida"}
+                    return self.send_json_response(response, status_code=400, cache_seconds=0)
+                    
+            except Exception as e:
+                response = {"status": "error", "message": f"Erro interno: {str(e)}"}
+                return self.send_json_response(response, status_code=500, cache_seconds=0)
+        
         elif path == '/api/telegram/webhook':
             # Webhook do Telegram - recebe mensagens dos usuários
             try:

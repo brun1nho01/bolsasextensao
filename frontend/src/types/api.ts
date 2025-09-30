@@ -13,6 +13,7 @@ export interface Bolsa {
   created_at: string; // (datetime)
   data_publicacao: string | null; // (date)
   data_fim_inscricao: string | null; // (date)
+  data_divulgacao_resultado: string | null; // (date) - NOVO CAMPO
   view_count: number;
   edital_id: string;
   nome_projeto: string;
@@ -46,6 +47,7 @@ export interface Edital {
   link: string;
   data_fim_inscricao: string | null; // (date)
   data_publicacao: string | null; // (date)
+  data_divulgacao_resultado: string | null; // (date) - NOVO CAMPO
   created_at: string; // (datetime)
 }
 

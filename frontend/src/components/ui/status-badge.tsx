@@ -9,19 +9,19 @@ interface StatusBadgeProps {
 const statusConfig = {
   disponivel: {
     label: "Disponível",
-    className: "badge-success",
+    className: "badge-info", // Azul - bolsas que retornaram após resultado
   },
   aberta: {
     label: "Aberta",
-    className: "badge-info",
+    className: "badge-success", // Verde - inscrições abertas
   },
   aguardando: {
     label: "Aguardando",
-    className: "badge-warning",
+    className: "badge-warning", // Amarela - aguardando resultado
   },
   preenchida: {
     label: "Preenchida",
-    className: "badge-danger",
+    className: "badge-danger", // Vermelha - já preenchida
   },
 };
 

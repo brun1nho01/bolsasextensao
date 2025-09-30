@@ -75,8 +75,8 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
             <StatusBadge status={bolsa.status} />
           </div>
 
-          {/* Title */}
-          <h3 className="text-lg font-semibold text-foreground leading-tight">
+          {/* Title - limitado a 3 linhas */}
+          <h3 className="text-lg font-semibold text-foreground leading-tight line-clamp-3">
             {formatProjectTitle(bolsa.nome_projeto)}
           </h3>
 
@@ -140,7 +140,7 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
           </div>
 
           {/* Deadline warning */}
-          {bolsa.status === "disponivel" && dataFim && isFuture(dataFim) && (
+          {bolsa.status === "aberta" && dataFim && isFuture(dataFim) && (
             <div className="p-2 rounded-md bg-danger/10 border border-danger/20">
               <div className="flex items-center gap-2">
                 <Clock className="w-3 h-3 text-danger" />
@@ -198,6 +198,7 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
             title={formatProjectTitle(bolsa.nome_projeto)}
             description={bolsa.tipo}
             className="pb-4"
+            titleClassName="line-clamp-3 leading-tight"
           />
 
           <GlassCardContent className="space-y-4">
@@ -210,10 +211,12 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
                   variant="outline"
                   className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm text-white ${
                     bolsa.status === "disponivel"
-                      ? "bg-success/10 border-success/20"
+                      ? "bg-info/10 border-info/20" // Azul
                       : bolsa.status === "aberta"
-                      ? "bg-info/10 border-info/20"
-                      : "bg-danger/10 border-danger/20"
+                      ? "bg-success/10 border-success/20" // Verde
+                      : bolsa.status === "aguardando"
+                      ? "bg-warning/10 border-warning/20" // Amarela
+                      : "bg-danger/10 border-danger/20" // Vermelha (preenchida)
                   }`}
                 >
                   {bolsa.vagas_total || 1}{" "}
@@ -257,7 +260,7 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
             </div>
 
             {/* Data Fim Inscrição (Apenas se disponível) */}
-            {bolsa.status === "disponivel" && dataFim && isFuture(dataFim) && (
+            {bolsa.status === "aberta" && dataFim && isFuture(dataFim) && (
               <div className="p-3 rounded-lg bg-danger/10 border border-danger/20 mt-2">
                 <p className="text-xs text-danger font-bold mb-1 flex items-center gap-1">
                   <Clock className="w-3 h-3" />

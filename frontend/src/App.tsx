@@ -12,6 +12,8 @@ import { toast } from "sonner";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import TelegramFloatingButton from "./components/TelegramFloatingButton";
+// 🐛 DEBUG: Importe apenas durante desenvolvimento
+// import { ViewSessionDebug } from "./components/debug/ViewSessionDebug";
 
 const CACHE_VERSION_KEY = "uenf-bolsas-cache-version";
 const APP_VERSION = import.meta.env.PACKAGE_VERSION || "0.0.0";
@@ -103,6 +105,8 @@ const App = () => (
       </BrowserRouter>
       {/* Botão flutuante Telegram - aparece em todas as páginas */}
       <TelegramFloatingButton />
+      {/* 🐛 DEBUG: Descomente para ativar debug durante desenvolvimento */}
+      {/* {process.env.NODE_ENV === 'development' && <ViewSessionDebug />} */}
     </TooltipProvider>
   </PersistQueryClientProvider>
 );

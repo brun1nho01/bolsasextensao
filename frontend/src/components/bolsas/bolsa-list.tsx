@@ -53,7 +53,7 @@ const BolsaListItem = ({
         <div className="space-y-3">
           {/* Header with title and status */}
           <div className="flex items-start justify-between gap-3">
-            <h3 className="text-lg font-semibold text-foreground flex-1 leading-tight">
+            <h3 className="text-lg font-semibold text-foreground flex-1 leading-tight line-clamp-3">
               {formatProjectTitle(bolsa.nome_projeto)}
             </h3>
             <StatusBadge status={bolsa.status} />
@@ -94,10 +94,12 @@ const BolsaListItem = ({
               variant="outline"
               className={`text-xs font-medium px-3 py-1 rounded-full animate-pulse backdrop-blur-sm text-white ${
                 bolsa.status === "disponivel"
-                  ? "bg-success/10 border-success/20"
+                  ? "bg-info/10 border-info/20" // Azul
                   : bolsa.status === "aberta"
-                  ? "bg-info/10 border-info/20"
-                  : "bg-danger/10 border-danger/20"
+                  ? "bg-success/10 border-success/20" // Verde
+                  : bolsa.status === "aguardando"
+                  ? "bg-warning/10 border-warning/20" // Amarela
+                  : "bg-danger/10 border-danger/20" // Vermelha (preenchida)
               }`}
             >
               {bolsa.vagas_total || 1}{" "}
@@ -115,7 +117,7 @@ const BolsaListItem = ({
           </div>
 
           {/* Deadline warning */}
-          {bolsa.status === "disponivel" && dataFim && isFuture(dataFim) && (
+          {bolsa.status === "aberta" && dataFim && isFuture(dataFim) && (
             <div className="flex items-center gap-2 p-2 rounded-md bg-danger/10 border border-danger/20">
               <Clock className="w-3 h-3 text-danger" />
               <span className="text-xs font-medium text-danger">
@@ -128,7 +130,7 @@ const BolsaListItem = ({
         /* Desktop Layout - Original */
         <div className="flex items-center justify-between">
           <div className="flex flex-col flex-1 min-w-0 pr-4">
-            <h3 className="mb-1 text-lg font-semibold truncate text-foreground">
+            <h3 className="mb-1 text-lg font-semibold text-foreground line-clamp-2">
               {formatProjectTitle(bolsa.nome_projeto)}
             </h3>
             <div className="flex items-center gap-4 text-sm text-muted-foreground">
