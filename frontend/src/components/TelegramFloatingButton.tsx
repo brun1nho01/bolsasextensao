@@ -10,6 +10,10 @@ export default function TelegramFloatingButton({
 }: TelegramFloatingButtonProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [telegram, setTelegram] = useState("");
+  const [preferencias, setPreferencias] = useState({
+    extensao: true,
+    apoio_academico: true,
+  });
   const [status, setStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -24,6 +28,13 @@ export default function TelegramFloatingButton({
       return;
     }
 
+    // ✅ Validação: Pelo menos uma preferência deve estar marcada
+    if (!preferencias.extensao && !preferencias.apoio_academico) {
+      setStatus("error");
+      setMessage("Marque pelo menos uma opção de notificação");
+      return;
+    }
+
     setStatus("loading");
     setMessage("Cadastrando...");
 
@@ -33,7 +44,10 @@ export default function TelegramFloatingButton({
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ telegram: telegram.trim() }),
+        body: JSON.stringify({
+          telegram: telegram.trim(),
+          preferencias: preferencias, // ← NOVO: Envia preferências
+        }),
       });
 
       const result = await response.json();
@@ -145,16 +159,51 @@ export default function TelegramFloatingButton({
               {/* Descrição */}
               <div className="mb-4">
                 <p className="text-sm text-gray-600 mb-2">
-                  Receba alertas instantâneos quando:
+                  Receba alertas instantâneos de:
                 </p>
-                <ul className="text-xs text-gray-500 space-y-1 pl-4">
-                  <li>
-                    🎓 Novos editais de <strong>extensão</strong> são publicados
-                  </li>
-                  <li>
-                    🏆 <strong>Resultados</strong> de seleções são divulgados
-                  </li>
-                </ul>
+              </div>
+
+              {/* Checkboxes de Preferências */}
+              <div className="mb-4 space-y-2">
+                <p className="text-sm font-medium text-gray-700">
+                  Quero receber alertas de:
+                </p>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={preferencias.extensao}
+                    onChange={(e) =>
+                      setPreferencias({
+                        ...preferencias,
+                        extensao: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700">
+                    🎓 <strong>Editais de Extensão</strong> (PROEX)
+                  </span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={preferencias.apoio_academico}
+                    onChange={(e) =>
+                      setPreferencias({
+                        ...preferencias,
+                        apoio_academico: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 text-blue-600 bg-white border-gray-300 rounded focus:ring-blue-500 focus:ring-2 cursor-pointer"
+                  />
+                  <span className="text-sm text-gray-700">
+                    📚 <strong>Bolsas de Apoio Acadêmico</strong> (ProAC)
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-2">
+                  ℹ️ Você receberá também os <strong>resultados</strong> das
+                  seleções marcadas
+                </p>
               </div>
 
               {/* Como Encontrar ID */}

@@ -3,13 +3,16 @@ Integração com o Sistema de Notificações Telegram Existente
 Ponte entre backend/scraper e api/index.py (sistema existente)
 """
 
-def call_telegram_notifications(titulo: str, link: str, tipo: str):
+def call_telegram_notifications(titulo: str, link: str, tipo: str, usuarios: list = None):
     """
     Chama o sistema de notificações existente no api/index.py
     
     Esta função serve como ponte entre:
     - backend/ (scraper, parser, database) 
     - api/index.py (sistema de notificações funcionando)
+    
+    Args:
+        usuarios: Lista opcional de telegram_ids filtrados por preferência
     """
     try:
         # Importa as funções do sistema existente
@@ -28,7 +31,8 @@ def call_telegram_notifications(titulo: str, link: str, tipo: str):
         result = notify_new_edital(
             edital_titulo=titulo,
             edital_link=link, 
-            edital_type=tipo
+            edital_type=tipo,
+            usuarios_filtrados=usuarios  # ← NOVO: Passa lista filtrada
         )
         
         print(f"📱 Resultado da notificação: {result}")

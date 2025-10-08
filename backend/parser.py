@@ -136,6 +136,24 @@ class UenfParser:
             return 'homologacao'
             
         return 'inscricao'
+    
+    def _classify_modalidade(self, titulo: str) -> str:
+        """Classifica a modalidade do edital (extensao ou apoio_academico) com base no título"""
+        titulo_lower = titulo.lower()
+        
+        # ProAC / Apoio Acadêmico tem prioridade (mais específico)
+        # Verifica com e sem acento
+        apoio_keywords = ['proac', 'apoio acadêmico', 'apoio academico']
+        if any(keyword in titulo_lower for keyword in apoio_keywords):
+            return 'apoio_academico'
+        
+        # PROEX / Extensão
+        extensao_keywords = ['proex', 'extensão', 'extensao']
+        if any(keyword in titulo_lower for keyword in extensao_keywords):
+            return 'extensao'
+        
+        # Fallback: se chegou até aqui mas não identificou, considera extensão por padrão
+        return 'extensao'
 
     def _get_match_key(self, text: str) -> str:
         """Gera uma 'chave' de correspondência para uma string, removendo acentos e pontuação."""
@@ -559,7 +577,8 @@ class UenfParser:
             is_resultado = any(kw in titulo_lower for kw in ['resultado', 'classificados'])
             is_inscricao = any(kw in titulo_lower for kw in ['inscreve', 'inscrições', 'inscrição', 'seletivo', 'seleção'])
 
-            dados_extraidos["modalidade"] = "extensao" # Default
+            # ✅ Classifica modalidade: extensao ou apoio_academico
+            dados_extraidos["modalidade"] = self._classify_modalidade(titulo)
 
             if is_resultado:
                 dados_extraidos['etapa'] = 'resultado'

@@ -376,8 +376,8 @@ def get_analytics_from_supabase():
         print(f"Erro ao buscar analytics: {e}")
         return None
 
-def subscribe_telegram_alerts(telegram_id):
-    """Cadastra ID do Telegram para receber alertas de novos editais"""
+def subscribe_telegram_alerts(telegram_id, preferencias=None):
+    """Cadastra ID do Telegram para receber alertas de novos editais com preferências personalizadas"""
     supabase = get_supabase_client()
     if not supabase:
         return {"status": "error", "message": "Supabase não disponível"}
@@ -398,16 +398,32 @@ def subscribe_telegram_alerts(telegram_id):
         # Para username, salvar sem @
         final_id = clean_id
         
+        # ✅ Validar e processar preferências
+        if preferencias is None:
+            # Preferências padrão: recebe tudo
+            preferencias = {
+                'extensao': True,
+                'apoio_academico': True
+            }
+        
+        # ✅ Validação: Pelo menos uma opção deve estar marcada
+        if not (preferencias.get('extensao') or preferencias.get('apoio_academico')):
+            return {
+                "status": "error", 
+                "message": "Você deve marcar pelo menos uma opção de notificação"
+            }
+        
         # Verificar se já existe
         existing = supabase.table('telegram_alerts').select('id').eq('telegram_id', final_id).execute()
         
         if existing.data and len(existing.data) > 0:
             return {"status": "info", "message": "Telegram já cadastrado para alertas"}
         
-        # Inserir novo cadastro
+        # Inserir novo cadastro com preferências
         result = supabase.table('telegram_alerts').insert({
             'telegram_id': final_id,
             'status': 'ativo',
+            'preferencias': preferencias,  # ← NOVO: Salva preferências
             'created_at': datetime.now(timezone.utc).isoformat()
         }).execute()
         
@@ -703,8 +719,8 @@ def detect_edital_type(edital_titulo):
     # 3️⃣ Se tem "proex"/"extensão" mas não tem palavras de resultado, é INSCRIÇÃO
     return 'extensao'
 
-def notify_new_edital(edital_titulo, edital_link, edital_type=None):
-    """Notifica todos os usuários cadastrados sobre novo edital de extensão ou resultado via Telegram"""
+def notify_new_edital(edital_titulo, edital_link, edital_type=None, usuarios_filtrados=None):
+    """Notifica usuários cadastrados sobre novo edital via Telegram com suporte a preferências"""
     supabase = get_supabase_client()
     if not supabase:
         return {"status": "error", "message": "Supabase não disponível"}
@@ -714,20 +730,26 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
         if not edital_type:
             edital_type = detect_edital_type(edital_titulo)
         
-        # 🎯 MESMA LÓGICA DO SCRAPER: Só notificar editais de EXTENSÃO
-        if edital_type not in ['extensao', 'resultado']:
+        # ✅ NOVO: Aceita extensão, resultado E apoio_academico
+        if edital_type not in ['extensao', 'resultado', 'apoio_academico']:
             return {
                 "status": "skipped", 
-                "message": f"Edital '{edital_type}' não é de extensão - seguindo lógica scraper.py",
+                "message": f"Edital '{edital_type}' não é notificável",
                 "edital_titulo": edital_titulo,
-                "note": "Só editais com 'proex' ou 'extensão' geram notificações"
+                "note": "Só editais de extensão, apoio acadêmico ou resultado geram notificações"
             }
         
-        # Buscar todos os IDs ativos do Telegram
-        subscribers = supabase.table('telegram_alerts').select('telegram_id').eq('status', 'ativo').execute()
+        # Buscar usuários: usa lista filtrada se fornecida, senão busca todos
+        if usuarios_filtrados:
+            # ✅ Usa lista filtrada por preferências
+            subscriber_list = [{'telegram_id': uid} for uid in usuarios_filtrados]
+        else:
+            # Fallback: busca todos os ativos
+            subscribers = supabase.table('telegram_alerts').select('telegram_id').eq('status', 'ativo').execute()
+            subscriber_list = subscribers.data if subscribers.data else []
         
-        if not subscribers.data:
-            return {"status": "info", "message": "Nenhum usuário cadastrado no Telegram"}
+        if not subscriber_list:
+            return {"status": "info", "message": "Nenhum usuário cadastrado/interessado no Telegram"}
         
         # Mensagem personalizada por tipo - MELHORADA para seguir scraper/parser
         if edital_type == 'extensao':
@@ -735,6 +757,12 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
             tipo_nome = "NOVO EDITAL DE EXTENSÃO"
             mensagem_extra = """💡 <b>Oportunidade de Extensão!</b>
 📚 Bolsas para projetos de extensão universitária
+⏰ Verifique prazos de inscrição"""
+        elif edital_type == 'apoio_academico':
+            emoji = "📚"
+            tipo_nome = "NOVA BOLSA DE APOIO ACADÊMICO"
+            mensagem_extra = """💡 <b>Oportunidade ProAC!</b>
+📖 Bolsas de Apoio Acadêmico da UENF
 ⏰ Verifique prazos de inscrição"""
         elif edital_type == 'resultado':
             emoji = "🏆"
@@ -763,11 +791,11 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
 
 <i>Para cancelar alertas, digite /stop</i>"""
 
-        # Enviar para todos
+        # Enviar para todos (usando lista filtrada ou completa)
         sent_count = 0
         errors = []
         
-        for subscriber in subscribers.data:
+        for subscriber in subscriber_list:
             telegram_id = subscriber['telegram_id']
             result = send_telegram_message(telegram_id, mensagem)
             
@@ -781,7 +809,7 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None):
         return {
             "status": "completed",
             "sent_count": sent_count,
-            "total_subscribers": len(subscribers.data),
+            "total_subscribers": len(subscriber_list),
             "edital_type": edital_type,
             "errors": errors
         }
@@ -1522,14 +1550,15 @@ class handler(BaseHTTPRequestHandler):
         
         # Roteamento POST
         if path == '/api/alertas/telegram':
-            # Cadastrar ID do Telegram para alertas
+            # Cadastrar ID do Telegram para alertas com preferências
             telegram_id = data.get('telegram', '').strip()
+            preferencias = data.get('preferencias')  # ← NOVO: Recebe preferências do frontend
             
             if not telegram_id:
                 response = {"error": "ID do Telegram é obrigatório (@usuario ou chat_id)"}
                 return self.send_json_response(response, status_code=400, cache_seconds=0)
             
-            result = subscribe_telegram_alerts(telegram_id)
+            result = subscribe_telegram_alerts(telegram_id, preferencias)  # ← NOVO: Passa preferências
             status_code = 200 if result['status'] == 'success' else 400
             return self.send_json_response(result, status_code=status_code, cache_seconds=0)
             

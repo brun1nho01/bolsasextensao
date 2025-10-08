@@ -47,6 +47,21 @@ const getStatusConfig = (edital: Edital) => {
   };
 };
 
+// ✅ NOVO: Badge de modalidade (PROEX vs ProAC)
+const getModalidadeBadge = (modalidade?: string) => {
+  if (modalidade === "apoio_academico") {
+    return {
+      label: "📚 ProAC",
+      className: "bg-purple-500/10 text-purple-700 border border-purple-500/20",
+    };
+  }
+  // Default: extensão
+  return {
+    label: "🎓 PROEX",
+    className: "bg-blue-500/10 text-blue-700 border border-blue-500/20",
+  };
+};
+
 export function EditaisTimeline({ editais }: EditaisTimelineProps) {
   return (
     <div className="space-y-8">
@@ -138,11 +153,19 @@ export function EditaisTimeline({ editais }: EditaisTimelineProps) {
                       <GlassCardHeader title={edital.titulo} className="pb-2" />
 
                       <GlassCardContent className="space-y-4">
-                        {/* Status Badge */}
-                        <div className="flex items-center gap-2">
+                        {/* Status Badge + Modalidade Badge */}
+                        <div className="flex items-center gap-2 flex-wrap">
                           <Badge className={config.badge}>
                             <Icon className="w-3 h-3 mr-1" />
                             {config.label}
+                          </Badge>
+                          {/* Badge de Modalidade (PROEX vs ProAC) */}
+                          <Badge
+                            className={
+                              getModalidadeBadge(edital.modalidade).className
+                            }
+                          >
+                            {getModalidadeBadge(edital.modalidade).label}
                           </Badge>
                         </div>
                         {/* Dates */}

@@ -125,6 +125,42 @@ class SupabaseManager:
         except Exception as e:
             print(f"⚠️ Erro ao verificar notificação existente: {e}")
             return False  # Em caso de erro, permite notificar (fail-safe)
+    
+    def _buscar_usuarios_por_preferencia(self, modalidade: str) -> list:
+        """
+        📱 Busca usuários que querem receber notificações deste tipo.
+        Se usuário não tem preferências, retorna para receber TUDO.
+        """
+        try:
+            # Busca usuários ativos
+            response = self.client.table('telegram_alerts').select('telegram_id, preferencias').eq('status', 'ativo').execute()
+            
+            if not response.data:
+                return []
+            
+            usuarios_filtrados = []
+            for usuario in response.data:
+                preferencias = usuario.get('preferencias')
+                
+                # Se não tem preferências definidas, recebe TUDO
+                if not preferencias:
+                    usuarios_filtrados.append(usuario['telegram_id'])
+                    continue
+                
+                # Se tem preferências, verifica se está ativo para essa modalidade
+                if preferencias.get(modalidade) is True:
+                    usuarios_filtrados.append(usuario['telegram_id'])
+            
+            return usuarios_filtrados
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao buscar usuários por preferência: {e}")
+            # Fallback: retorna todos os ativos (fail-safe)
+            try:
+                fallback = self.client.table('telegram_alerts').select('telegram_id').eq('status', 'ativo').execute()
+                return [u['telegram_id'] for u in fallback.data] if fallback.data else []
+            except:
+                return []
 
     def _registrar_notificacao_enviada(self, edital_id: str, edital_titulo: str, edital_link: str, tipo_edital: str, tipo_notificacao: str, resultado: dict):
         """
@@ -240,7 +276,8 @@ class SupabaseManager:
                 'link': edital_url,
                 'data_fim_inscricao': edital_data.get('data_fim_inscricao'),
                 'data_publicacao': edital_data.get('data_publicacao'),
-                'data_divulgacao_resultado': edital_data.get('data_divulgacao_resultado'),  # NOVO CAMPO
+                'data_divulgacao_resultado': edital_data.get('data_divulgacao_resultado'),
+                'modalidade': edital_data.get('modalidade', 'extensao'),  # ← NOVO: Salva modalidade
                 'projetos': projetos_payload
             }
 
@@ -263,12 +300,29 @@ class SupabaseManager:
                 if is_edital_novo:  # ← VERIFICAÇÃO CRÍTICA: Só notifica editais NOVOS
                     try:
                         tipo_edital = edital_data.get('etapa', 'inscricao')  # 'inscricao' ou 'resultado'
-                        tipo_notificacao = 'extensao' if tipo_edital == 'inscricao' else 'resultado'
+                        modalidade = edital_data.get('modalidade', 'extensao')  # ← NOVO: 'extensao' ou 'apoio_academico'
+                        
+                        # Define tipo de notificação baseado na modalidade
+                        if modalidade == 'apoio_academico':
+                            tipo_notificacao = 'apoio_academico'
+                        elif tipo_edital == 'resultado':
+                            tipo_notificacao = 'resultado'
+                        else:
+                            tipo_notificacao = 'extensao'
+                        
+                        # ✅ Busca usuários que querem receber esse tipo de edital
+                        usuarios_interessados = self._buscar_usuarios_por_preferencia(modalidade)
+                        
+                        if not usuarios_interessados:
+                            print(f"ℹ️ [SEM USUÁRIOS] Nenhum usuário quer receber '{modalidade}'. Não notificando.")
+                            return final_edital_id
                         
                         # Log da tentativa de notificação
                         print(f"📱 [NOVO EDITAL] Preparando notificação: '{edital_data.get('titulo')}'")
                         print(f"   ├─ Tipo Edital: {tipo_edital}")
+                        print(f"   ├─ Modalidade: {modalidade}")
                         print(f"   ├─ Tipo Notificação: {tipo_notificacao}")
+                        print(f"   ├─ Usuários interessados: {len(usuarios_interessados)}")
                         print(f"   └─ Link: {edital_url}")
                         
                         # Chama sistema de notificações
@@ -277,7 +331,8 @@ class SupabaseManager:
                         notification_result = call_telegram_notifications(
                             titulo=edital_data.get('titulo', 'Novo Edital'),
                             link=edital_url,
-                            tipo=tipo_notificacao
+                            tipo=tipo_notificacao,
+                            usuarios=usuarios_interessados  # ← NOVO: Passa lista filtrada
                         )
                         
                         # Registra no histórico
@@ -823,9 +878,9 @@ class SupabaseManager:
         """Busca editais com paginação."""
         try:
             offset = (page - 1) * page_size
-            # Garante que 'data_publicacao' e 'data_divulgacao_resultado' sejam retornados
+            # Garante que 'data_publicacao', 'data_divulgacao_resultado' e 'modalidade' sejam retornados
             query = self.client.table('editais').select(
-                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado'
+                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado, modalidade'
             ).order('data_publicacao', desc=True).range(offset, offset + page_size - 1)
             
             return query.execute().data
@@ -836,9 +891,9 @@ class SupabaseManager:
     def get_edital(self, edital_id: str):
         """Busca um único edital pelo seu ID."""
         try:
-            # Garante que 'data_publicacao' e 'data_divulgacao_resultado' sejam retornados
+            # Garante que 'data_publicacao', 'data_divulgacao_resultado' e 'modalidade' sejam retornados
             return self.client.table('editais').select(
-                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado'
+                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado, modalidade'
             ).eq('id', edital_id).single().execute().data
         except Exception as e:
             print(f"  > Erro ao buscar edital por ID: {e}")

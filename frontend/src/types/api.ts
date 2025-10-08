@@ -48,6 +48,7 @@ export interface Edital {
   data_fim_inscricao: string | null; // (date)
   data_publicacao: string | null; // (date)
   data_divulgacao_resultado: string | null; // (date) - NOVO CAMPO
+  modalidade?: string; // ← NOVO: "extensao" ou "apoio_academico"
   created_at: string; // (datetime)
 }
 

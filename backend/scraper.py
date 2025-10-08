@@ -217,7 +217,9 @@ class UenfScraper:
             print(f"\n--- [SCRAPER] Análisando Edital {i+1}/{len(link_tags)}: '{titulo}' ---", flush=True)
 
             titulo_lower = titulo.lower()
-            if 'proex' not in titulo_lower and 'extensão' not in titulo_lower:
+            # ✅ Aceita: PROEX, Extensão, ProAC, Apoio Acadêmico (com ou sem acento)
+            editais_aceitos = ['proex', 'extensão', 'extensao', 'proac', 'apoio acadêmico', 'apoio academico']
+            if not any(termo in titulo_lower for termo in editais_aceitos):
                 continue
             
             keywords_inscricao = ['inscreve', 'inscrições', 'inscrição', 'seletivo', 'seleção']
