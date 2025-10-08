@@ -47,10 +47,24 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
   const queryClient = useQueryClient();
 
   const handleMouseEnter = () => {
-    queryClient.prefetchQuery({
-      queryKey: ["bolsa", bolsa.id],
-      queryFn: () => fetchBolsa(bolsa.id),
-    });
+    // Adia o prefetch para um momento em que o navegador esteja ocioso
+    // Isso garante que a animação de hover não seja bloqueada.
+    if ("requestIdleCallback" in window) {
+      window.requestIdleCallback(() => {
+        queryClient.prefetchQuery({
+          queryKey: ["bolsa", bolsa.id],
+          queryFn: () => fetchBolsa(bolsa.id),
+        });
+      });
+    } else {
+      // Fallback para navegadores mais antigos
+      setTimeout(() => {
+        queryClient.prefetchQuery({
+          queryKey: ["bolsa", bolsa.id],
+          queryFn: () => fetchBolsa(bolsa.id),
+        });
+      }, 100);
+    }
   };
 
   const isRecent = bolsa.data_publicacao

@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { motion } from "framer-motion";
+import React from "react";
 
 interface GlassCardProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ interface GlassCardProps {
   hoverable?: boolean;
   animated?: boolean;
   onClick?: () => void;
+  onMouseEnter?: () => void;
 }
 
 export function GlassCard({
@@ -22,6 +24,7 @@ export function GlassCard({
   hoverable = true,
   animated = true,
   onClick,
+  onMouseEnter,
 }: GlassCardProps) {
   const CardComponent = animated ? motion.div : "div";
 
@@ -35,6 +38,7 @@ export function GlassCard({
       })}
       className={cn("glass-card", hoverable && "cursor-pointer", className)}
       onClick={onClick}
+      onMouseEnter={onMouseEnter}
     >
       {children}
     </CardComponent>

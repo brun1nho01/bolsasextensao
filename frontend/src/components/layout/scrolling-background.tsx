@@ -38,7 +38,7 @@ const ImageLayer = ({
   return (
     <motion.div className="absolute inset-0 h-full w-full" style={{ opacity }}>
       <img src={src} alt="Background" className="h-full w-full object-cover" />
-      <div className="absolute inset-0 bg-black/60" />
+      <div className="absolute inset-0 bg-black/70" />
     </motion.div>
   );
 };
