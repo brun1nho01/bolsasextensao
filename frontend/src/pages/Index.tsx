@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -41,54 +41,6 @@ type FilterState = {
 
 type Section = "bolsas" | "ranking" | "editais";
 
-// 2. Definir as ações que podem modificar o estado
-type FilterAction =
-  | { type: "SET_FILTER"; payload: Partial<FilterState> }
-  | { type: "SET_PAGE"; payload: number }
-  | { type: "SET_SEARCH"; payload: string }
-  | { type: "CLEAR_FILTERS" };
-
-const initialState: FilterState = {
-  q: "",
-  status: "all",
-  tipo: "all",
-  orientador: "all",
-  centro: "all",
-  sort: "nome_projeto",
-  order: "asc",
-  page: 1,
-};
-
-// 3. Criar a função reducer
-function filtersReducer(state: FilterState, action: FilterAction): FilterState {
-  switch (action.type) {
-    case "SET_FILTER":
-      return { ...state, ...action.payload, page: 1 }; // Reseta a página em qualquer filtro
-    case "SET_PAGE":
-      return { ...state, page: action.payload };
-    case "SET_SEARCH":
-      return { ...state, q: action.payload, page: 1 }; // Reseta a página na busca
-    case "CLEAR_FILTERS":
-      return { ...initialState, sort: state.sort, order: state.order }; // Mantém a ordenação
-    default:
-      return state;
-  }
-}
-
-// Função para inicializar o estado a partir da URL
-const initializer = (searchParams: URLSearchParams): FilterState => {
-  return {
-    q: searchParams.get("q") || initialState.q,
-    status: searchParams.get("status") || initialState.status,
-    tipo: searchParams.get("tipo") || initialState.tipo,
-    orientador: searchParams.get("orientador") || initialState.orientador,
-    centro: searchParams.get("centro") || initialState.centro,
-    sort: searchParams.get("sort") || initialState.sort,
-    order: (searchParams.get("order") as "asc" | "desc") || initialState.order,
-    page: parseInt(searchParams.get("page") || "1", 10),
-  };
-};
-
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -96,68 +48,84 @@ const Index = () => {
   const { sessionId, hasViewedBolsa, markBolsaAsViewed } = useViewSession();
   const incrementViewMutation = useIncrementBolsaView();
 
-  // 4. Substituir múltiplos useStates por um único useReducer
-  const [filters, dispatch] = useReducer(
-    filtersReducer,
-    searchParams,
-    initializer
-  );
-
-  // Estados que não são filtros permanecem como useState
+  // Estados que não dependem da URL
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedBolsaId, setSelectedBolsaId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
+  // A URL é a única fonte da verdade para os filtros e seção
   const currentSection = (searchParams.get("section") as Section) || "bolsas";
 
-  const handleSetCurrentSection = (section: Section) => {
-    const params = new URLSearchParams(searchParams);
-    params.set("section", section);
-    // Ao trocar de aba, removemos os filtros de bolsa e a paginação
-    params.delete("q");
-    params.delete("status");
-    params.delete("tipo");
-    params.delete("orientador");
-    params.delete("centro");
-    params.delete("sort");
-    params.delete("order");
-    params.delete("page");
-    setSearchParams(params);
-    // Limpa o estado dos filtros também
-    dispatch({ type: "CLEAR_FILTERS" });
-  };
+  const filters = useMemo(() => {
+    const page = parseInt(searchParams.get("page") || "1", 10);
+    const q = searchParams.get("q") || "";
+    const status = searchParams.get("status") || "all";
+    const tipo = searchParams.get("tipo") || "all";
+    const centro = searchParams.get("centro") || "all";
+    const orientador = searchParams.get("orientador") || "all"; // Chave ausente adicionada
+    const sort = searchParams.get("sort") || "nome_projeto";
+    const order = (searchParams.get("order") as "asc" | "desc") || "asc";
 
-  // 5. Sincronizar o estado do reducer com a URL (apenas para filtros de bolsa)
-  useEffect(() => {
-    // Este efeito só deve rodar se a seção for 'bolsas'
-    if (currentSection !== "bolsas") return;
+    return { page, q, status, tipo, centro, orientador, sort, order };
+  }, [searchParams]);
 
-    const params = new URLSearchParams(searchParams);
-    // Adiciona parâmetros à URL apenas se forem diferentes do estado inicial
-    if (filters.q) params.set("q", filters.q);
-    else params.delete("q");
-    if (filters.status !== "all") params.set("status", filters.status);
-    else params.delete("status");
-    if (filters.tipo !== "all") params.set("tipo", filters.tipo);
-    else params.delete("tipo");
-    if (filters.orientador !== "all")
-      params.set("orientador", filters.orientador);
-    else params.delete("orientador");
-    if (filters.centro !== "all") params.set("centro", filters.centro);
-    else params.delete("centro");
-    if (filters.sort !== initialState.sort) params.set("sort", filters.sort);
-    else params.delete("sort");
-    if (filters.order !== initialState.order)
-      params.set("order", filters.order);
-    else params.delete("order");
-    if (filters.page > 1) params.set("page", filters.page.toString());
-    else params.delete("page");
+  // Funções para manipular a URL, estabilizadas com useCallback
+  const handleUpdateParams = useCallback(
+    (newParams: Record<string, string | number>, resetPage = false) => {
+      setSearchParams(
+        (prev) => {
+          const newSearchParams = new URLSearchParams(prev);
+          Object.entries(newParams).forEach(([key, value]) => {
+            if (value) {
+              newSearchParams.set(key, String(value));
+            } else {
+              newSearchParams.delete(key);
+            }
+          });
 
-    setSearchParams(params, { replace: true });
-  }, [filters, currentSection, setSearchParams]);
+          if (resetPage) {
+            newSearchParams.delete("page");
+          }
+          return newSearchParams;
+        },
+        { replace: true }
+      );
+    },
+    [setSearchParams]
+  );
 
-  // 6. Preparar filtros para a API usando useMemo para otimização
+  const handleClearFilters = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const newSearchParams = new URLSearchParams(prev);
+        // Mantém section, sort, order e page
+        const preserved = {
+          section: newSearchParams.get("section"),
+          sort: newSearchParams.get("sort"),
+          order: newSearchParams.get("order"),
+        };
+        const clearedParams = new URLSearchParams();
+        if (preserved.section) clearedParams.set("section", preserved.section);
+        if (preserved.sort) clearedParams.set("sort", preserved.sort);
+        if (preserved.order) clearedParams.set("order", preserved.order);
+
+        return clearedParams;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
+  const handleSetCurrentSection = useCallback(
+    (section: Section) => {
+      const newSearchParams = new URLSearchParams();
+      newSearchParams.set("section", section);
+      setSearchParams(newSearchParams, { replace: true });
+    },
+    [setSearchParams]
+  );
+
+  // Preparar filtros para a API usando useMemo para otimização
   const apiFilters = useMemo(() => {
     return {
       page: filters.page,
@@ -172,15 +140,19 @@ const Index = () => {
   }, [filters]);
 
   // API Hooks
-  const { data: bolsasData, isLoading, error } = useBolsas(apiFilters);
-  const { data: rankingData } = useRanking();
-  const { data: editaisData } = useEditais();
-  const { data: preenchidasData } = useBolsas({
-    status: "preenchida",
-    page_size: 1,
-  });
-  const { data: totalBolsasData } = useBolsas({ page_size: 1 });
-  const { data: selectedBolsaData } = useBolsa(selectedBolsaId || "");
+  const {
+    data: bolsasData,
+    isLoading,
+    error,
+  } = useBolsas(apiFilters, currentSection === "bolsas");
+  const { data: rankingData } = useRanking(currentSection === "ranking");
+  const { data: editaisData } = useEditais(currentSection === "editais");
+  const { data: preenchidasData } = useBolsas(
+    { status: "preenchida", page_size: 1 },
+    true
+  );
+  const { data: totalBolsasData } = useBolsas({ page_size: 1 }, true);
+  const { data: selectedBolsaData } = useBolsa(selectedBolsaId);
 
   // Efeito para incrementar a visualização quando o modal abre
   useEffect(() => {
@@ -231,9 +203,7 @@ const Index = () => {
       <ScrollingBackgroundProvider>
         <main>
           <HeroSection
-            onSearch={(query) =>
-              dispatch({ type: "SET_SEARCH", payload: query })
-            }
+            onSearch={(query) => handleUpdateParams({ q: query }, true)}
             searchQuery={filters.q}
             totalProjetos={bolsasAtivas}
             bolsasPreenchidas={bolsasPreenchidas}
@@ -296,9 +266,9 @@ const Index = () => {
                     <AdvancedFilters
                       filters={filters}
                       onFiltersChange={(payload) =>
-                        dispatch({ type: "SET_FILTER", payload })
+                        handleUpdateParams(payload, true)
                       }
-                      onClearFilters={() => dispatch({ type: "CLEAR_FILTERS" })}
+                      onClearFilters={handleClearFilters}
                       isOpen={filtersOpen}
                       onToggle={() => setFiltersOpen(!filtersOpen)}
                     />
@@ -327,11 +297,9 @@ const Index = () => {
                               <AdvancedFilters
                                 filters={filters}
                                 onFiltersChange={(payload) =>
-                                  dispatch({ type: "SET_FILTER", payload })
+                                  handleUpdateParams(payload, true)
                                 }
-                                onClearFilters={() =>
-                                  dispatch({ type: "CLEAR_FILTERS" })
-                                }
+                                onClearFilters={handleClearFilters}
                                 isOpen={true}
                                 onToggle={() => {}}
                               />
@@ -344,9 +312,7 @@ const Index = () => {
                     <PaginationControls
                       currentPage={filters.page}
                       totalPages={bolsasData?.total_pages ?? 1}
-                      onPageChange={(page) =>
-                        dispatch({ type: "SET_PAGE", payload: page })
-                      }
+                      onPageChange={(page) => handleUpdateParams({ page })}
                     />
                   </div>
 
@@ -364,7 +330,7 @@ const Index = () => {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => dispatch({ type: "CLEAR_FILTERS" })}
+                          onClick={handleClearFilters}
                           className="text-xs hover:bg-muted/50"
                         >
                           Limpar filtros
@@ -390,9 +356,7 @@ const Index = () => {
                   <PaginationControls
                     currentPage={filters.page}
                     totalPages={bolsasData?.total_pages ?? 1}
-                    onPageChange={(page) =>
-                      dispatch({ type: "SET_PAGE", payload: page })
-                    }
+                    onPageChange={(page) => handleUpdateParams({ page })}
                     className="mt-8 flex justify-center"
                   />
                 </div>
