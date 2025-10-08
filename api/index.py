@@ -5,7 +5,7 @@ import os
 from datetime import datetime, timezone
 
 # ✅ CORREÇÃO: Importar rate limiter
-from rate_limiter_vercel import apply_rate_limit, vercel_limiter
+from .rate_limiter_vercel import apply_rate_limit, vercel_limiter
 
 # Importar Supabase apenas se disponível (para não quebrar outros endpoints)
 try:
@@ -779,7 +779,7 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None, usuarios_fil
             mensagem_extra = "💡 Nova oportunidade disponível!"
             
         # ✅ CORREÇÃO: Usar sanitização segura contra XSS
-        from security_utils import create_telegram_safe_message
+        from .security_utils import create_telegram_safe_message
         
         mensagem = create_telegram_safe_message(
             tipo_edital=edital_type or 'desconhecido',
@@ -943,7 +943,7 @@ class handler(BaseHTTPRequestHandler):
         self.send_header('Content-type', 'application/json; charset=utf-8')
         
         # ✅ CORREÇÃO: CORS seguro (sem wildcard)
-        from security_utils import build_cors_headers
+        from .security_utils import build_cors_headers
         origin = self.headers.get('Origin', '')
         cors_headers = build_cors_headers(origin)
         for header, value in cors_headers.items():
