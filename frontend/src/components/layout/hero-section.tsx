@@ -1,5 +1,7 @@
 import { motion } from "framer-motion";
 import { Search, Sparkles, Package, CheckCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -17,6 +19,19 @@ export function HeroSection({
   totalProjetos,
   bolsasPreenchidas,
 }: HeroSectionProps) {
+  const [inputValue, setInputValue] = useState(searchQuery);
+  const debouncedSearchQuery = useDebounce(inputValue, 300); // 300ms de atraso
+
+  useEffect(() => {
+    // Sincroniza o input se a busca for limpa por um filtro externo
+    setInputValue(searchQuery);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    // Dispara a busca apenas quando o valor debounced muda
+    onSearch(debouncedSearchQuery);
+  }, [debouncedSearchQuery, onSearch]);
+
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden">
       {/* Hero Content */}
@@ -61,8 +76,8 @@ export function HeroSection({
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
                   <Input
                     placeholder="Buscar por projeto, orientador, palavra-chave..."
-                    value={searchQuery}
-                    onChange={(e) => onSearch(e.target.value)}
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
                     className="pl-12 pr-4 py-6 bg-transparent border-0 text-lg placeholder:text-muted-foreground focus-visible:ring-0"
                   />
                 </div>

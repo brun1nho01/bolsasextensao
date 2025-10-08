@@ -1,4 +1,4 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
   BolsasResponse,
@@ -74,10 +74,10 @@ export const useBolsas = (filters: FilterParams = {}) => {
   });
 };
 
-// Fetch single bolsa details WITHOUT incrementing view count
-export const useBolsaData = (id: string) => {
+// Fetch single bolsa details, replacing the old useBolsaData
+export const useBolsa = (id: string) => {
   return useQuery<Bolsa, Error>({
-    queryKey: ["bolsa-data", id],
+    queryKey: ["bolsa", id],
     queryFn: () => fetchBolsa(id, false),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
@@ -86,6 +86,8 @@ export const useBolsaData = (id: string) => {
 
 // Increment view count for a bolsa (only if not viewed in this session)
 export const useIncrementBolsaView = () => {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: async ({
       bolsaId,
@@ -109,59 +111,38 @@ export const useIncrementBolsaView = () => {
       }
       return response.json();
     },
-  });
-};
+    // Optimistic update for instant UI feedback
+    onMutate: async (variables) => {
+      await queryClient.cancelQueries({
+        queryKey: ["bolsa", variables.bolsaId],
+      });
+      const previousBolsa = queryClient.getQueryData<Bolsa>([
+        "bolsa",
+        variables.bolsaId,
+      ]);
 
-// Fetch single bolsa details WITH session-aware view tracking
-export const useBolsa = (id: string) => {
-  const { sessionId, hasViewedBolsa, markBolsaAsViewed } = useViewSession();
-  const incrementViewMutation = useIncrementBolsaView();
-
-  return useQuery<Bolsa, Error>({
-    queryKey: ["bolsa", id],
-    queryFn: async () => {
-      // Primeiro, busca os dados da bolsa sem incrementar views
-      const bolsa = await fetchBolsa(id, false);
-
-      // Verifica se já foi vista nesta sessão
-      if (!hasViewedBolsa(id)) {
-        // Primeira vez que vê nesta sessão - incrementa view
-        try {
-          await incrementViewMutation.mutateAsync({ bolsaId: id, sessionId });
-          markBolsaAsViewed(id);
-
-          // Atualiza o contador local para UI responsiva
-          bolsa.view_count = (bolsa.view_count || 0) + 1;
-
-          // View incrementada com sucesso
-          if (process.env.NODE_ENV === "development") {
-            console.log(
-              `📊 View incrementada para bolsa ${id} (sessão: ${sessionId.slice(
-                0,
-                8
-              )}...)`
-            );
-          }
-        } catch (error) {
-          if (process.env.NODE_ENV === "development") {
-            console.warn("Erro ao incrementar view:", error);
-          }
-          // Marca como vista mesmo se falhou, para não ficar tentando
-          markBolsaAsViewed(id);
-        }
-      } else {
-        if (process.env.NODE_ENV === "development") {
-          console.log(
-            `👁️ Bolsa ${id} já foi vista nesta sessão - não incrementando`
-          );
-        }
+      if (previousBolsa) {
+        queryClient.setQueryData<Bolsa>(["bolsa", variables.bolsaId], {
+          ...previousBolsa,
+          view_count: (previousBolsa.view_count || 0) + 1,
+        });
       }
-
-      return bolsa;
+      return { previousBolsa };
     },
-    enabled: !!id,
-    staleTime: 30 * 1000, // 30 seconds - menor cache para refletir mudanças de view
-    retry: 1, // Reduz tentativas para não inflar views
+    onError: (err, variables, context) => {
+      if (context?.previousBolsa) {
+        queryClient.setQueryData(
+          ["bolsa", variables.bolsaId],
+          context.previousBolsa
+        );
+      }
+    },
+    onSettled: (data, error, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["bolsa", variables.bolsaId] });
+      // Also invalidate ranking and bolsa list to reflect new view count eventually
+      queryClient.invalidateQueries({ queryKey: ["ranking"] });
+      queryClient.invalidateQueries({ queryKey: ["bolsas"] });
+    },
   });
 };
 

@@ -10,8 +10,15 @@ import { BolsaList } from "@/components/bolsas/bolsa-list";
 import { RankingPodium } from "@/components/ranking/ranking-podium";
 import { EditaisTimeline } from "@/components/editais/editais-timeline";
 import { BolsaDetailsModal } from "@/components/modals/bolsa-details-modal";
-import { useBolsas, useRanking, useEditais, useBolsa } from "@/hooks/useApi";
+import {
+  useBolsas,
+  useRanking,
+  useEditais,
+  useBolsa,
+  useIncrementBolsaView,
+} from "@/hooks/useApi";
 import { useDeviceType } from "@/hooks/use-mobile";
+import { useViewSession } from "@/hooks/useViewSession";
 import { Bolsa } from "@/types/api";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, Calendar, LayoutGrid, Filter } from "lucide-react";
@@ -86,6 +93,8 @@ const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { isMobile, isTablet, isDesktop } = useDeviceType();
+  const { sessionId, hasViewedBolsa, markBolsaAsViewed } = useViewSession();
+  const incrementViewMutation = useIncrementBolsaView();
 
   // 4. Substituir múltiplos useStates por um único useReducer
   const [filters, dispatch] = useReducer(
@@ -172,6 +181,20 @@ const Index = () => {
   });
   const { data: totalBolsasData } = useBolsas({ page_size: 1 });
   const { data: selectedBolsaData } = useBolsa(selectedBolsaId || "");
+
+  // Efeito para incrementar a visualização quando o modal abre
+  useEffect(() => {
+    if (selectedBolsaId && !hasViewedBolsa(selectedBolsaId)) {
+      incrementViewMutation.mutate({ bolsaId: selectedBolsaId, sessionId });
+      markBolsaAsViewed(selectedBolsaId);
+    }
+  }, [
+    selectedBolsaId,
+    hasViewedBolsa,
+    markBolsaAsViewed,
+    incrementViewMutation,
+    sessionId,
+  ]);
 
   // 🆕 Usar contagem de vagas ao invés de contagem de bolsas
   const bolsasAtivas = totalBolsasData?.total_vagas ?? totalBolsasData?.total;
