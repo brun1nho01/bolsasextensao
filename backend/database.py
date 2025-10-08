@@ -6,6 +6,7 @@ import unicodedata
 from difflib import get_close_matches
 from collections import defaultdict
 from typing import Optional
+from datetime import datetime, timezone
 
 # Lista de palavras comuns a serem ignoradas na normalização para comparação
 STOP_WORDS = {
@@ -113,12 +114,62 @@ class SupabaseManager:
             print(f"⚠️ Erro na limpeza de bolsas antigas: {e}")
             return 0
 
+    def _verificar_notificacao_existente(self, edital_id: str, tipo_notificacao: str) -> bool:
+        """
+        📋 Verifica se já existe notificação enviada para este edital+tipo.
+        Evita notificações duplicadas.
+        """
+        try:
+            response = self.client.table('notificacoes_enviadas').select('id').eq('edital_id', edital_id).eq('tipo_notificacao', tipo_notificacao).limit(1).execute()
+            return len(response.data) > 0
+        except Exception as e:
+            print(f"⚠️ Erro ao verificar notificação existente: {e}")
+            return False  # Em caso de erro, permite notificar (fail-safe)
+
+    def _registrar_notificacao_enviada(self, edital_id: str, edital_titulo: str, edital_link: str, tipo_edital: str, tipo_notificacao: str, resultado: dict):
+        """
+        📝 Registra notificação enviada no histórico.
+        Permite auditoria e análise de notificações.
+        """
+        try:
+            # Extrai informações do resultado
+            status = resultado.get('status', 'desconhecido')
+            usuarios_notificados = resultado.get('sent_count', 0)
+            
+            # Prepara detalhes em JSON
+            detalhes = {
+                'resultado_completo': resultado,
+                'timestamp': datetime.now(timezone.utc).isoformat()
+            }
+            
+            # Determina status da notificação
+            status_final = 'enviada' if status in ['success', 'sent'] else ('ignorada' if status == 'skipped' else 'erro')
+            
+            # Insere no histórico
+            self.client.table('notificacoes_enviadas').insert({
+                'edital_id': edital_id,
+                'edital_titulo': edital_titulo,
+                'edital_link': edital_link,
+                'tipo_edital': tipo_edital,
+                'tipo_notificacao': tipo_notificacao,
+                'usuarios_notificados': usuarios_notificados,
+                'status': status_final,
+                'detalhes': detalhes
+            }).execute()
+            
+            print(f"📝 Histórico atualizado: {status_final} - {usuarios_notificados} usuário(s)")
+            
+        except Exception as e:
+            print(f"⚠️ Erro ao registrar histórico de notificação: {e}")
+            # Não falha a operação principal se o log falhar
+
     def upsert_edital(self, edital_data: dict, edital_url: str):
         """
         Insere ou atualiza um edital de forma transacional usando uma função RPC no Supabase.
         A lógica de correspondência fuzzy de projetos é feita em Python antes de enviar os dados.
         
         🆕 NOVA FUNCIONALIDADE: Remove automaticamente bolsas não preenchidas de editais antigos.
+        📱 NOTIFICAÇÕES INTELIGENTES: Só notifica editais NOVOS, evitando spam.
         """
         if not self.client:
             print("Cliente Supabase não inicializado. Abortando operação.")
@@ -127,7 +178,8 @@ class SupabaseManager:
         try:
             # 1. Busca o ID do edital existente ou prepara para criar um novo
             response = self.client.table('editais').select('id').eq('link', edital_url).execute()
-            edital_id = response.data[0]['id'] if response.data else None
+            edital_id_antes = response.data[0]['id'] if response.data else None
+            is_edital_novo = edital_id_antes is None  # ← CRUCIAL: Detecta se é INSERT ou UPDATE
 
             # 2. Prepara a lista de projetos para o payload final
             projetos_payload = []
@@ -203,26 +255,59 @@ class SupabaseManager:
                 if edital_data.get('etapa') == 'inscricao':  # Só limpa para editais de inscrição
                     self._cleanup_old_available_bolsas()
                 
-                # 🔔 NOTIFICAÇÕES TELEGRAM - Chama sistema existente do index.py
-                # Segue a mesma lógica do scraper: apenas editais de extensão  
-                try:
-                    from telegram_integration import call_telegram_notifications
-                    
-                    titulo = edital_data.get('titulo', 'Novo Edital')
-                    
-                    # Chama o sistema de notificações existente
-                    notification_result = call_telegram_notifications(
-                        titulo=titulo,
-                        link=edital_url,
-                        tipo="extensao"
-                    )
-                    
-                    print(f"📱 Notificações processadas: {notification_result.get('status', 'unknown')}")
+                # 🔔 NOTIFICAÇÕES TELEGRAM INTELIGENTES
+                # ✅ Só notifica se for EDITAL NOVO (evita spam de editais já notificados)
+                # ✅ Detecta tipo correto: 'inscricao' ou 'resultado'
+                # ✅ Registra em histórico para auditoria
+                
+                if is_edital_novo:  # ← VERIFICAÇÃO CRÍTICA: Só notifica editais NOVOS
+                    try:
+                        tipo_edital = edital_data.get('etapa', 'inscricao')  # 'inscricao' ou 'resultado'
+                        tipo_notificacao = 'extensao' if tipo_edital == 'inscricao' else 'resultado'
                         
-                except Exception as e:
-                    print(f"⚠️ Erro ao enviar notificações: {e}")
-                    # Log dos dados para debug
-                    print(f"📱 DADOS: {edital_data.get('titulo')} | {edital_url}")
+                        # Log da tentativa de notificação
+                        print(f"📱 [NOVO EDITAL] Preparando notificação: '{edital_data.get('titulo')}'")
+                        print(f"   ├─ Tipo Edital: {tipo_edital}")
+                        print(f"   ├─ Tipo Notificação: {tipo_notificacao}")
+                        print(f"   └─ Link: {edital_url}")
+                        
+                        # Chama sistema de notificações
+                        from telegram_integration import call_telegram_notifications
+                        
+                        notification_result = call_telegram_notifications(
+                            titulo=edital_data.get('titulo', 'Novo Edital'),
+                            link=edital_url,
+                            tipo=tipo_notificacao
+                        )
+                        
+                        # Registra no histórico
+                        self._registrar_notificacao_enviada(
+                            edital_id=final_edital_id,
+                            edital_titulo=edital_data.get('titulo'),
+                            edital_link=edital_url,
+                            tipo_edital=tipo_edital,
+                            tipo_notificacao=tipo_notificacao,
+                            resultado=notification_result
+                        )
+                        
+                        print(f"✅ Notificação enviada e registrada: {notification_result.get('status', 'unknown')}")
+                            
+                    except Exception as e:
+                        print(f"❌ Erro ao enviar notificação: {e}")
+                        # Registra erro no histórico mesmo assim
+                        try:
+                            self._registrar_notificacao_enviada(
+                                edital_id=final_edital_id,
+                                edital_titulo=edital_data.get('titulo'),
+                                edital_link=edital_url,
+                                tipo_edital=edital_data.get('etapa', 'inscricao'),
+                                tipo_notificacao='erro',
+                                resultado={'status': 'erro', 'message': str(e)}
+                            )
+                        except:
+                            pass  # Se nem o log funcionar, só ignora
+                else:
+                    print(f"ℹ️ [EDITAL EXISTENTE] Notificação ignorada (já foi notificado): '{edital_data.get('titulo')}'")
                 
                 return final_edital_id
             else:
@@ -434,31 +519,59 @@ class SupabaseManager:
         
         print(f"  > {bolsas_atualizadas} bolsas foram atualizadas para 'preenchida'.", flush=True)
         
-        # 🔔 NOTIFICAÇÕES TELEGRAM DE RESULTADO - Chama sistema existente  
-        # Segue a mesma lógica do scraper: apenas editais de extensão
+        # 🔔 NOTIFICAÇÕES TELEGRAM DE RESULTADO
+        # ✅ Verifica se já foi notificado antes de enviar
+        # ✅ Registra em histórico
         if bolsas_atualizadas > 0:
             try:
-                from telegram_integration import call_telegram_notifications
+                # Busca o edital_id pelo link
+                edital_response = self.client.table('editais').select('id, titulo').eq('link', edital_url).limit(1).execute()
+                edital_info = edital_response.data[0] if edital_response.data else None
                 
-                # Criar título baseado nos aprovados
-                orientadores = list(set([a.get('orientador', '') for a in aprovados if a.get('orientador')]))
-                titulo_resultado = f"Resultado PROEX - {bolsas_atualizadas} bolsa(s) preenchida(s)"
-                
-                if orientadores and len(orientadores) <= 3:
-                    titulo_resultado += f" - {', '.join(orientadores[:3])}"
-                
-                # Chama o sistema de notificações existente
-                notification_result = call_telegram_notifications(
-                    titulo=titulo_resultado,
-                    link=edital_url,
-                    tipo="resultado"
-                )
-                
-                print(f"📱 Notificações de resultado: {notification_result.get('status', 'processadas')}")
+                if edital_info:
+                    edital_id = edital_info['id']
+                    edital_titulo = edital_info['titulo']
+                    
+                    # Verifica se já notificou resultado para este edital
+                    ja_notificou = self._verificar_notificacao_existente(edital_id, 'resultado')
+                    
+                    if not ja_notificou:
+                        from telegram_integration import call_telegram_notifications
+                        
+                        # Criar título baseado nos aprovados
+                        orientadores = list(set([a.get('orientador', '') for a in aprovados if a.get('orientador')]))
+                        titulo_resultado = f"Resultado PROEX - {bolsas_atualizadas} bolsa(s) preenchida(s)"
+                        
+                        if orientadores and len(orientadores) <= 3:
+                            titulo_resultado += f" - {', '.join(orientadores[:3])}"
+                        
+                        print(f"📱 [NOVO RESULTADO] Preparando notificação: {bolsas_atualizadas} aprovados")
+                        
+                        # Chama o sistema de notificações existente
+                        notification_result = call_telegram_notifications(
+                            titulo=titulo_resultado,
+                            link=edital_url,
+                            tipo="resultado"
+                        )
+                        
+                        # Registra no histórico
+                        self._registrar_notificacao_enviada(
+                            edital_id=edital_id,
+                            edital_titulo=edital_titulo,
+                            edital_link=edital_url,
+                            tipo_edital='resultado',
+                            tipo_notificacao='resultado',
+                            resultado=notification_result
+                        )
+                        
+                        print(f"✅ Notificação de resultado enviada: {notification_result.get('status', 'processadas')}")
+                    else:
+                        print(f"ℹ️ [RESULTADO JÁ NOTIFICADO] Ignorando: '{edital_titulo}'")
                     
             except Exception as e:
-                print(f"⚠️ Erro ao enviar notificações de resultado: {e}")
-                print(f"📱 DADOS: {bolsas_atualizadas} bolsa(s) | {edital_url}")
+                print(f"❌ Erro ao enviar notificação de resultado: {e}")
+                import traceback
+                traceback.print_exc()
         
         return bolsas_atualizadas
 
