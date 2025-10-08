@@ -95,6 +95,13 @@ const Index = () => {
     [setSearchParams]
   );
 
+  const handlePageChange = useCallback(
+    (page: number) => {
+      handleUpdateParams({ page });
+    },
+    [handleUpdateParams]
+  );
+
   const handleClearFilters = useCallback(() => {
     setSearchParams(
       (prev) => {
@@ -312,7 +319,7 @@ const Index = () => {
                     <PaginationControls
                       currentPage={filters.page}
                       totalPages={bolsasData?.total_pages ?? 1}
-                      onPageChange={(page) => handleUpdateParams({ page })}
+                      onPageChange={handlePageChange}
                     />
                   </div>
 
@@ -356,7 +363,7 @@ const Index = () => {
                   <PaginationControls
                     currentPage={filters.page}
                     totalPages={bolsasData?.total_pages ?? 1}
-                    onPageChange={(page) => handleUpdateParams({ page })}
+                    onPageChange={handlePageChange}
                     className="mt-8 flex justify-center"
                   />
                 </div>
