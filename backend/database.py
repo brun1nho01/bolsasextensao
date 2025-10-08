@@ -188,6 +188,7 @@ class SupabaseManager:
                 'link': edital_url,
                 'data_fim_inscricao': edital_data.get('data_fim_inscricao'),
                 'data_publicacao': edital_data.get('data_publicacao'),
+                'data_divulgacao_resultado': edital_data.get('data_divulgacao_resultado'),  # NOVO CAMPO
                 'projetos': projetos_payload
             }
 
@@ -709,9 +710,9 @@ class SupabaseManager:
         """Busca editais com paginação."""
         try:
             offset = (page - 1) * page_size
-            # Garante que 'data_publicacao' seja retornado e ordena pela data de publicação real
+            # Garante que 'data_publicacao' e 'data_divulgacao_resultado' sejam retornados
             query = self.client.table('editais').select(
-                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao'
+                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado'
             ).order('data_publicacao', desc=True).range(offset, offset + page_size - 1)
             
             return query.execute().data
@@ -722,9 +723,9 @@ class SupabaseManager:
     def get_edital(self, edital_id: str):
         """Busca um único edital pelo seu ID."""
         try:
-            # Garante que 'data_publicacao' seja retornado
+            # Garante que 'data_publicacao' e 'data_divulgacao_resultado' sejam retornados
             return self.client.table('editais').select(
-                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao'
+                'id, titulo, link, data_fim_inscricao, created_at, data_publicacao, data_divulgacao_resultado'
             ).eq('id', edital_id).single().execute().data
         except Exception as e:
             print(f"  > Erro ao buscar edital por ID: {e}")
