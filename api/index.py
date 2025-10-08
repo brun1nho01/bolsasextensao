@@ -814,6 +814,85 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None, usuarios_fil
     except Exception as e:
         return {"status": "error", "message": f"Erro ao notificar: {str(e)}"}
 
+def process_notification_queue():
+    """
+    Busca notificações pendentes no banco e tenta enviá-las.
+    Projetado para ser chamado por um Cron Job.
+    """
+    supabase = get_supabase_client()
+    if not supabase:
+        return {"status": "error", "message": "Supabase não disponível"}
+    
+    processed_count = 0
+    success_count = 0
+    failed_count = 0
+    
+    try:
+        # Busca até 5 notificações pendentes ou com falha (com menos de 3 tentativas)
+        response = supabase.table('notificacoes_enviadas').select('*').filter('or', '(status.eq.pendente,and(status.eq.falha,tentativas.lt.3))').limit(5).execute()
+        
+        if not response.data:
+            return {"status": "success", "message": "Nenhuma notificação para processar."}
+            
+        notifications_to_process = response.data
+        
+        for notification in notifications_to_process:
+            notification_id = notification['id']
+            current_tentativas = notification.get('tentativas', 0)
+            detalhes = notification.get('detalhes', {})
+
+            try:
+                # Extrai os dados para envio
+                titulo = notification['edital_titulo']
+                link = notification['edital_link']
+                tipo = notification['tipo_notificacao']
+                usuarios = detalhes.get('usuarios_alvo')
+
+                if not usuarios:
+                    # Marca como ignorada se não houver usuários
+                    supabase.table('notificacoes_enviadas').update({
+                        'status': 'ignorada',
+                        'detalhes': {**detalhes, 'error': 'Nenhum usuário alvo definido.'}
+                    }).eq('id', notification_id).execute()
+                    processed_count += 1
+                    continue
+                
+                # Chama a função de envio de notificação
+                result = notify_new_edital(
+                    edital_titulo=titulo,
+                    edital_link=link,
+                    edital_type=tipo,
+                    usuarios_filtrados=usuarios
+                )
+                
+                # Atualiza o status para 'enviada'
+                supabase.table('notificacoes_enviadas').update({
+                    'status': 'enviada',
+                    'usuarios_notificados': result.get('sent_count', 0),
+                    'detalhes': {**detalhes, 'resultado_envio': result}
+                }).eq('id', notification_id).execute()
+                
+                success_count += 1
+                
+            except Exception as e:
+                # Se falhar, atualiza o status para 'falha' e incrementa tentativas
+                supabase.table('notificacoes_enviadas').update({
+                    'status': 'falha',
+                    'tentativas': current_tentativas + 1,
+                    'detalhes': {**detalhes, 'last_error': str(e), 'error_timestamp': datetime.now(timezone.utc).isoformat()}
+                }).eq('id', notification_id).execute()
+                failed_count += 1
+            
+            processed_count += 1
+            
+        return {
+            "status": "success",
+            "message": f"Processamento concluído. Total: {processed_count}, Sucessos: {success_count}, Falhas: {failed_count}",
+        }
+
+    except Exception as e:
+        return {"status": "error", "message": f"Erro crítico no processador da fila: {str(e)}"}
+
 def run_scraping_serverless():
     """
     Versão do scraping para ambiente serverless com detecção de novos editais.
@@ -997,13 +1076,13 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 "message": "API do Scraper UENF funcionando!",
                 "endpoints": {
-                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views", "/api/test-views-simple", "/api/reset-views-panic"],
+                    "GET": ["/api/health", "/api/test", "/api/config-test", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/process-notifications"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 },
                 "status": "ok",
                 "whatsapp_alerts": "✅ Configurado"
             }
-            return self.send_json_response(response, cache_seconds=300)  # 5 min cache
+            return self.send_json_response(response, cache_seconds=60)
             
         elif path == '/api/health':
             response = {
@@ -1556,12 +1635,29 @@ class handler(BaseHTTPRequestHandler):
                     "message": f"Erro ao configurar webhook: {str(e)}"
                 }, status_code=500, cache_seconds=0)
         
+        elif path == '/api/process-notifications':
+            # Protegido por Cron Secret
+            cron_secret_header = self.headers.get('x-vercel-cron-authorization', '').replace('Bearer ', '')
+            cron_secret_env = os.environ.get("CRON_SECRET", "")
+            
+            is_cron_authorized = False
+            if cron_secret_env and cron_secret_header:
+                import hmac
+                is_cron_authorized = hmac.compare_digest(cron_secret_header, cron_secret_env)
+
+            if not is_cron_authorized:
+                return self.send_json_response({"error": "Unauthorized"}, status_code=401, cache_seconds=0)
+            
+            result = process_notification_queue()
+            status_code = 200 if result.get('status') == 'success' else 500
+            return self.send_json_response(result, status_code=status_code, cache_seconds=0)
+        
         else:
             response = {
                 "error": "Endpoint não encontrado",
                 "path": path,
                 "available_endpoints": {
-                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/debug-views", "/api/test-views-simple", "/api/reset-views-panic"],
+                    "GET": ["/api/", "/api/health", "/api/bolsas", "/api/bolsas/{id}", "/api/analytics", "/api/editais", "/api/ranking", "/api/metadata", "/api/telegram/setup-webhook", "/api/telegram/debug-webhook", "/api/telegram/test-webhook", "/api/telegram/check-messages", "/api/telegram/logs", "/api/telegram/force-update-webhook", "/api/telegram/detect-production-url", "/api/force-cache-refresh", "/api/process-notifications"],
                     "POST": ["/api/alertas/telegram", "/api/alertas/notify", "/api/alertas/test-detection", "/api/alertas/listar", "/api/telegram/webhook"]
                 }
             }

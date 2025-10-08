@@ -30,6 +30,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchBolsa } from "@/hooks/useApi";
 
 interface BolsaCardProps {
   bolsa: Bolsa;
@@ -42,6 +44,14 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
   const displayDateStr = bolsa.data_publicacao || bolsa.created_at;
   const displayDate = parseDateAsLocal(displayDateStr);
   const dataFim = parseDateAsLocal(bolsa.data_fim_inscricao);
+  const queryClient = useQueryClient();
+
+  const handleMouseEnter = () => {
+    queryClient.prefetchQuery({
+      queryKey: ["bolsa", bolsa.id],
+      queryFn: () => fetchBolsa(bolsa.id),
+    });
+  };
 
   const isRecent = bolsa.data_publicacao
     ? Date.now() - (parseDateAsLocal(bolsa.data_publicacao)?.getTime() || 0) <
@@ -53,6 +63,7 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
       hoverable={true}
       className="h-full relative overflow-hidden cursor-pointer"
       onClick={() => onClick(bolsa)}
+      onMouseEnter={handleMouseEnter}
     >
       {/* Mobile/Tablet Layout */}
       {isMobile || isTablet ? (

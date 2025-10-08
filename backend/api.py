@@ -13,6 +13,19 @@ from models import BolsaComProjeto, Projeto, Edital, BolsasResponse
 from database import SupabaseManager
 from tasks import run_scraping_task
 
+# --- Instância Única do SupabaseManager (Singleton) ---
+# Cria a instância uma vez quando o módulo é carregado.
+# Isso evita criar uma nova conexão com o banco a cada requisição.
+try:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_KEY")
+    if not supabase_url or not supabase_key:
+        raise RuntimeError("Variáveis de ambiente do Supabase não configuradas.")
+    db_manager_singleton = SupabaseManager(supabase_url=supabase_url, supabase_key=supabase_key)
+except Exception as e:
+    print(f"ERRO CRÍTICO: Falha ao inicializar a conexão com o Supabase: {e}")
+    db_manager_singleton = None
+
 app = FastAPI(
     title="UENF Scraper API",
     description="API para acessar dados de editais e bolsas da UENF, coletados por um scraper com IA.",
@@ -34,13 +47,11 @@ app.add_middleware(
 )
 
 # --- Dependência para o SupabaseManager ---
-# Isso garante que teremos uma única instância do manager por requisição
+# Retorna a instância única criada na inicialização.
 def get_db_manager():
-    supabase_url = os.environ.get("SUPABASE_URL")
-    supabase_key = os.environ.get("SUPABASE_KEY")
-    if not supabase_url or not supabase_key:
-        raise RuntimeError("Variáveis de ambiente do Supabase não configuradas.")
-    return SupabaseManager(supabase_url=supabase_url, supabase_key=supabase_key)
+    if db_manager_singleton is None:
+        raise HTTPException(status_code=503, detail="Serviço de banco de dados indisponível.")
+    return db_manager_singleton
 
 # --- Dependência de Segurança ---
 def verify_api_key(x_api_key: str = Header(...)):

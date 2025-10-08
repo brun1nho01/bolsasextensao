@@ -11,6 +11,10 @@ from google.api_core import exceptions as google_exceptions
 from difflib import get_close_matches
 from datetime import datetime
 
+# ✅ NOVO: Importa a função de um local centralizado
+from .utils import get_match_key
+
+
 def _save_error_log(context: str, content: str):
     """Salva uma resposta de IA que causou erro em um arquivo de log."""
     log_dir = os.path.join(os.path.dirname(__file__), 'logs')
@@ -114,19 +118,6 @@ class UenfParser:
         # Se saiu do loop, significa que todas as chaves falharam
         return None
 
-    def _classify_modalidade(self, titulo, texto_pdf):
-        titulo = titulo.lower()
-        texto_pdf = texto_pdf.lower()
-        
-        if any(keyword in titulo for keyword in ['extensão', 'proex']):
-            return 'extensao'
-        if any(keyword in titulo for keyword in ['proac', 'proppg']):
-            return 'ic'
-        if 'iniciação científica' in texto_pdf or 'iniciação em desenvolvimento tecnológico e inovação' in texto_pdf:
-            return 'ic'
-            
-        return 'outros'
-
     def _classify_etapa(self, titulo, texto_pdf):
         titulo = titulo.lower()
         texto_pdf = texto_pdf.lower()
@@ -160,18 +151,6 @@ class UenfParser:
         
         # Fallback: se chegou até aqui mas não identificou, considera extensão por padrão
         return 'extensao'
-
-    def _get_match_key(self, text: str) -> str:
-        """Gera uma 'chave' de correspondência para uma string, removendo acentos e pontuação."""
-        if not isinstance(text, str):
-            return ""
-        try:
-            text_sem_acentos = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
-            text_upper = text_sem_acentos.upper()
-            text_limpo = re.sub(r'[^\w\s]', '', text_upper)
-            return " ".join(text_limpo.split())
-        except Exception:
-            return ""
 
     def _extract_and_clean_text_from_pdf(self, pdf_path: str) -> str:
         try:
@@ -317,8 +296,8 @@ class UenfParser:
                                 orientador_corrigido = orientador_bruto
 
                                 if orientadores_conhecidos:
-                                    orientador_bruto_key = self._get_match_key(orientador_bruto)
-                                    orientador_keys_map = {self._get_match_key(o): o for o in orientadores_conhecidos}
+                                    orientador_bruto_key = get_match_key(orientador_bruto)
+                                    orientador_keys_map = {get_match_key(o): o for o in orientadores_conhecidos}
                                     matches_keys = get_close_matches(orientador_bruto_key, list(orientador_keys_map.keys()), n=1, cutoff=0.8)
                                     
                                     if matches_keys:

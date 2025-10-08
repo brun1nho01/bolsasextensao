@@ -6,6 +6,7 @@ import { BolsaCard } from "./bolsa-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BolsaCardSkeleton } from "./bolsa-card-skeleton";
 
 interface BolsaGridProps {
   bolsas: Bolsa[];
@@ -22,25 +23,9 @@ export function BolsaGrid({
 }: BolsaGridProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {[...Array(6)].map((_, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: i * 0.1 }}
-            className="glass-card h-80"
-          >
-            <div className="animate-pulse">
-              <div className="h-4 bg-muted rounded w-3/4 mb-4"></div>
-              <div className="h-3 bg-muted rounded w-1/2 mb-6"></div>
-              <div className="space-y-2">
-                <div className="h-3 bg-muted rounded"></div>
-                <div className="h-3 bg-muted rounded w-5/6"></div>
-                <div className="h-3 bg-muted rounded w-4/6"></div>
-              </div>
-            </div>
-          </motion.div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+        {Array.from({ length: 9 }).map((_, i) => (
+          <BolsaCardSkeleton key={i} index={i} />
         ))}
       </div>
     );

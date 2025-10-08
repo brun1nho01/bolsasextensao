@@ -32,6 +32,8 @@ type FilterState = {
   page: number;
 };
 
+type Section = "bolsas" | "ranking" | "editais";
+
 // 2. Definir as ações que podem modificar o estado
 type FilterAction =
   | { type: "SET_FILTER"; payload: Partial<FilterState> }
@@ -96,31 +98,55 @@ const Index = () => {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedBolsaId, setSelectedBolsaId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentSection, setCurrentSection] = useState<
-    "bolsas" | "ranking" | "editais"
-  >("bolsas");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
-  // 5. Sincronizar o estado do reducer com a URL
+  const currentSection = (searchParams.get("section") as Section) || "bolsas";
+
+  const handleSetCurrentSection = (section: Section) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("section", section);
+    // Ao trocar de aba, removemos os filtros de bolsa e a paginação
+    params.delete("q");
+    params.delete("status");
+    params.delete("tipo");
+    params.delete("orientador");
+    params.delete("centro");
+    params.delete("sort");
+    params.delete("order");
+    params.delete("page");
+    setSearchParams(params);
+    // Limpa o estado dos filtros também
+    dispatch({ type: "CLEAR_FILTERS" });
+  };
+
+  // 5. Sincronizar o estado do reducer com a URL (apenas para filtros de bolsa)
   useEffect(() => {
-    const params = new URLSearchParams();
+    // Este efeito só deve rodar se a seção for 'bolsas'
+    if (currentSection !== "bolsas") return;
+
+    const params = new URLSearchParams(searchParams);
     // Adiciona parâmetros à URL apenas se forem diferentes do estado inicial
-    if (filters.q !== initialState.q) params.set("q", filters.q);
-    if (filters.status !== initialState.status)
-      params.set("status", filters.status);
-    if (filters.tipo !== initialState.tipo) params.set("tipo", filters.tipo);
-    if (filters.orientador !== initialState.orientador)
+    if (filters.q) params.set("q", filters.q);
+    else params.delete("q");
+    if (filters.status !== "all") params.set("status", filters.status);
+    else params.delete("status");
+    if (filters.tipo !== "all") params.set("tipo", filters.tipo);
+    else params.delete("tipo");
+    if (filters.orientador !== "all")
       params.set("orientador", filters.orientador);
-    if (filters.centro !== initialState.centro)
-      params.set("centro", filters.centro);
+    else params.delete("orientador");
+    if (filters.centro !== "all") params.set("centro", filters.centro);
+    else params.delete("centro");
     if (filters.sort !== initialState.sort) params.set("sort", filters.sort);
+    else params.delete("sort");
     if (filters.order !== initialState.order)
       params.set("order", filters.order);
-    if (filters.page !== initialState.page)
-      params.set("page", filters.page.toString());
+    else params.delete("order");
+    if (filters.page > 1) params.set("page", filters.page.toString());
+    else params.delete("page");
 
     setSearchParams(params, { replace: true });
-  }, [filters, setSearchParams]);
+  }, [filters, currentSection, setSearchParams]);
 
   // 6. Preparar filtros para a API usando useMemo para otimização
   const apiFilters = useMemo(() => {
@@ -198,7 +224,7 @@ const Index = () => {
             >
               <Button
                 variant={currentSection === "bolsas" ? "default" : "outline"}
-                onClick={() => setCurrentSection("bolsas")}
+                onClick={() => handleSetCurrentSection("bolsas")}
                 className={`${
                   currentSection === "bolsas"
                     ? "gradient-primary shadow-glow"
@@ -210,7 +236,7 @@ const Index = () => {
               </Button>
               <Button
                 variant={currentSection === "ranking" ? "default" : "outline"}
-                onClick={() => setCurrentSection("ranking")}
+                onClick={() => handleSetCurrentSection("ranking")}
                 className={`${
                   currentSection === "ranking"
                     ? "gradient-primary shadow-glow"
@@ -222,7 +248,7 @@ const Index = () => {
               </Button>
               <Button
                 variant={currentSection === "editais" ? "default" : "outline"}
-                onClick={() => setCurrentSection("editais")}
+                onClick={() => handleSetCurrentSection("editais")}
                 className={`${
                   currentSection === "editais"
                     ? "gradient-primary shadow-glow"

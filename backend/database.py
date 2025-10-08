@@ -8,6 +8,9 @@ from collections import defaultdict
 from typing import Optional
 from datetime import datetime, timezone
 
+# ✅ NOVO: Importa a função de um local centralizado
+from .utils import get_match_key
+
 # Lista de palavras comuns a serem ignoradas na normalização para comparação
 STOP_WORDS = {
     'A', 'O', 'E', 'UM', 'UMA', 'DE', 'DO', 'DA', 'EM', 'NO', 'NA', 'COM', 'POR', 'PARA', 'SE',
@@ -54,21 +57,6 @@ class SupabaseManager:
         except Exception:
             return ""
 
-    def _get_match_key(self, text: str) -> str:
-        """
-        Normalização para COMPARAÇÃO de strings (nomes, etc.).
-        Remove acentos, pontuação e normaliza espaços.
-        """
-        if not isinstance(text, str):
-            return ""
-        try:
-            text_sem_acentos = ''.join(c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn')
-            text_upper = text_sem_acentos.upper()
-            text_limpo = re.sub(r'[^\w\s]', '', text_upper)
-            return " ".join(text_limpo.split())
-        except Exception:
-            return ""
-
     def _get_project_match_key(self, text: str) -> str:
         """
         Normalização agressiva APENAS para COMPARAÇÃO de projetos.
@@ -77,7 +65,7 @@ class SupabaseManager:
         if not isinstance(text, str):
             return ""
         # Reutiliza a normalização base para remover acentos/pontuação
-        base_normalized_text = self._get_match_key(text)
+        base_normalized_text = get_match_key(text)
         words = base_normalized_text.split()
         filtered_words = [word for word in words if word not in STOP_WORDS and word not in EDITAL_TERMS and not word.isdigit()]
         return " ".join(filtered_words)
@@ -126,6 +114,24 @@ class SupabaseManager:
             print(f"⚠️ Erro ao verificar notificação existente: {e}")
             return False  # Em caso de erro, permite notificar (fail-safe)
     
+    def _enfileirar_notificacao(self, edital_id: str, edital_titulo: str, edital_link: str, tipo_edital: str, tipo_notificacao: str, usuarios: list):
+        """
+        Enfileira uma notificação para ser processada, em vez de enviá-la diretamente.
+        """
+        try:
+            # O status padrão da tabela agora é 'pendente', então não precisamos especificá-lo
+            self.client.table('notificacoes_enviadas').insert({
+                'edital_id': edital_id,
+                'edital_titulo': edital_titulo,
+                'edital_link': edital_link,
+                'tipo_edital': tipo_edital,
+                'tipo_notificacao': tipo_notificacao,
+                'detalhes': { 'usuarios_alvo': usuarios } # Armazena para quem enviar
+            }).execute()
+            print(f"✅ Notificação para o edital '{edital_titulo}' enfileirada para {len(usuarios)} usuário(s).")
+        except Exception as e:
+            print(f"❌ Erro ao enfileirar notificação: {e}")
+
     def _buscar_usuarios_por_preferencia(self, modalidade: str) -> list:
         """
         📱 Busca usuários que querem receber notificações deste tipo.
@@ -162,43 +168,6 @@ class SupabaseManager:
             except:
                 return []
 
-    def _registrar_notificacao_enviada(self, edital_id: str, edital_titulo: str, edital_link: str, tipo_edital: str, tipo_notificacao: str, resultado: dict):
-        """
-        📝 Registra notificação enviada no histórico.
-        Permite auditoria e análise de notificações.
-        """
-        try:
-            # Extrai informações do resultado
-            status = resultado.get('status', 'desconhecido')
-            usuarios_notificados = resultado.get('sent_count', 0)
-            
-            # Prepara detalhes em JSON
-            detalhes = {
-                'resultado_completo': resultado,
-                'timestamp': datetime.now(timezone.utc).isoformat()
-            }
-            
-            # Determina status da notificação
-            status_final = 'enviada' if status in ['success', 'sent'] else ('ignorada' if status == 'skipped' else 'erro')
-            
-            # Insere no histórico
-            self.client.table('notificacoes_enviadas').insert({
-                'edital_id': edital_id,
-                'edital_titulo': edital_titulo,
-                'edital_link': edital_link,
-                'tipo_edital': tipo_edital,
-                'tipo_notificacao': tipo_notificacao,
-                'usuarios_notificados': usuarios_notificados,
-                'status': status_final,
-                'detalhes': detalhes
-            }).execute()
-            
-            print(f"📝 Histórico atualizado: {status_final} - {usuarios_notificados} usuário(s)")
-            
-        except Exception as e:
-            print(f"⚠️ Erro ao registrar histórico de notificação: {e}")
-            # Não falha a operação principal se o log falhar
-
     def upsert_edital(self, edital_data: dict, edital_url: str):
         """
         Insere ou atualiza um edital de forma transacional usando uma função RPC no Supabase.
@@ -227,8 +196,8 @@ class SupabaseManager:
             else:
                 # Busca todos os projetos existentes para este edital para fazer o match
                 projetos_existentes = []
-                if edital_id:
-                    res_existentes = self.client.table('projetos').select('id, nome_projeto').eq('edital_id', edital_id).execute()
+                if edital_id_antes:
+                    res_existentes = self.client.table('projetos').select('id, nome_projeto').eq('edital_id', edital_id_antes).execute()
                     projetos_existentes = res_existentes.data or []
                 
                 # Cria um mapa para correspondência fuzzy
@@ -292,16 +261,11 @@ class SupabaseManager:
                 if edital_data.get('etapa') == 'inscricao':  # Só limpa para editais de inscrição
                     self._cleanup_old_available_bolsas()
                 
-                # 🔔 NOTIFICAÇÕES TELEGRAM INTELIGENTES
-                # ✅ Só notifica se for EDITAL NOVO (evita spam de editais já notificados)
-                # ✅ Detecta tipo correto: 'inscricao' ou 'resultado'
-                # ✅ Registra em histórico para auditoria
-                
-                if is_edital_novo:  # ← VERIFICAÇÃO CRÍTICA: Só notifica editais NOVOS
+                # 🔔 NOTIFICAÇÕES TELEGRAM INTELIGENTES via FILA
+                # ✅ Só enfileira se for EDITAL NOVO (evita spam)
+                if is_edital_novo:
                     try:
-                        import requests
-                        
-                        tipo_edital = edital_data.get('etapa', 'inscricao')  # 'inscricao' ou 'resultado'
+                        tipo_edital = edital_data.get('etapa', 'inscricao')
                         modalidade = edital_data.get('modalidade', 'extensao')
                         
                         if modalidade == 'apoio_academico':
@@ -315,62 +279,21 @@ class SupabaseManager:
                         
                         if not usuarios_interessados:
                             print(f"ℹ️ [SEM USUÁRIOS] Nenhum usuário quer receber '{modalidade}'. Não notificando.")
-                            return final_edital_id
-                        
-                        # Prepara chamada para o endpoint de notificação
-                        api_url = os.environ.get("API_BASE_URL_FOR_SCRAPER", "https://bolsasextensao.vercel.app/api")
-                        api_key = os.environ.get("SCRAPER_API_KEY")
-
-                        if not api_key:
-                            print("⚠️ SCRAPER_API_KEY não configurada. Não é possível notificar via API.")
-                            return final_edital_id
-                            
-                        notification_payload = {
-                            "titulo": edital_data.get('titulo', 'Novo Edital'),
-                            "link": edital_url,
-                            "tipo": tipo_notificacao,
-                            "usuarios": usuarios_interessados
-                        }
-                        headers = {
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {api_key}"
-                        }
-                        
-                        print(f"📱 [NOVO EDITAL] Disparando notificação via API para {len(usuarios_interessados)} usuário(s)...")
-
-                        response = requests.post(f"{api_url}/notify", json=notification_payload, headers=headers, timeout=30)
-                        response.raise_for_status() # Lança erro se status não for 2xx
-
-                        notification_result = response.json()
-                        
-                        # Registra no histórico
-                        self._registrar_notificacao_enviada(
-                            edital_id=final_edital_id,
-                            edital_titulo=edital_data.get('titulo'),
-                            edital_link=edital_url,
-                            tipo_edital=tipo_edital,
-                            tipo_notificacao=tipo_notificacao,
-                            resultado=notification_result
-                        )
-                        
-                        print(f"✅ Notificação enviada via API: {notification_result.get('status', 'unknown')}")
+                        else:
+                            # Enfileira a notificação em vez de enviar diretamente
+                            self._enfileirar_notificacao(
+                                edital_id=final_edital_id,
+                                edital_titulo=edital_data.get('titulo', 'Novo Edital'),
+                                edital_link=edital_url,
+                                tipo_edital=tipo_edital,
+                                tipo_notificacao=tipo_notificacao,
+                                usuarios=usuarios_interessados
+                            )
                             
                     except Exception as e:
-                        print(f"❌ Erro ao disparar notificação via API: {e}")
-                        # Registra erro no histórico mesmo assim
-                        try:
-                            self._registrar_notificacao_enviada(
-                                edital_id=final_edital_id,
-                                edital_titulo=edital_data.get('titulo'),
-                                edital_link=edital_url,
-                                tipo_edital=edital_data.get('etapa', 'inscricao'),
-                                tipo_notificacao='erro',
-                                resultado={'status': 'erro', 'message': str(e)}
-                            )
-                        except:
-                            pass  # Se nem o log funcionar, só ignora
+                        print(f"❌ Erro durante a lógica de enfileiramento de notificação: {e}")
                 else:
-                    print(f"ℹ️ [EDITAL EXISTENTE] Notificação ignorada (já foi notificado): '{edital_data.get('titulo')}'")
+                    print(f"ℹ️ [EDITAL EXISTENTE] Notificação ignorada (edital já existia): '{edital_data.get('titulo')}'")
                 
                 return final_edital_id
             else:
@@ -401,204 +324,9 @@ class SupabaseManager:
         - Processa matches em memória
         - Batch update final
         """
-        # 🚀 USAR VERSÃO OTIMIZADA
-        USE_OPTIMIZED_VERSION = True
-        
-        if USE_OPTIMIZED_VERSION:
-            return self._atualizar_bolsas_otimizado(aprovados, edital_url)
-        
-        # Versão antiga (mantida como fallback)
-        if not aprovados:
-            return 0
-
-        print(f"  > Atualizando status de {len(aprovados)} bolsas com base no resultado...")
-        bolsas_atualizadas = 0
-
-        # ETAPA 1: Carregar todos os orientadores do DB para correspondência fuzzy
-        todos_orientadores_db = self.get_all_orientadores()
-        if not todos_orientadores_db:
-            return 0 # Aborta se não houver orientadores para comparar
-
-        # CRIA UM MAPA ONDE UMA CHAVE NORMALIZADA PODE TER MÚLTIPLAS VARIAÇÕES ORIGINAIS (COM ACENTOS DIFERENTES)
-        orientador_keys_to_originals = defaultdict(list)
-        for o in todos_orientadores_db:
-            key = self._get_match_key(o)
-            if o not in orientador_keys_to_originals[key]:
-                orientador_keys_to_originals[key].append(o)
-
-
-        for aprovado in aprovados:
-            # Processando candidato aprovado
-            
-            orientador_original = aprovado.get('orientador')
-            projeto_original = aprovado.get('nome_projeto')
-            
-            # CHAVES DE COMPARAÇÃO (sem acentos)
-            orientador_key_pdf = self._get_match_key(orientador_original)
-            projeto_match_key_pdf = self._get_project_match_key(projeto_original)
-
-            # Tentando correspondência de orientador/projeto
-
-            if not orientador_original or not projeto_original:
-                continue
-
-            # ETAPA 2: Correspondência Fuzzy do Nome do Orientador
-            # Mapeia a chave de match (sem acento) para o nome original (com acento) do DB
-            
-            # Compara as chaves sem acento
-            matches_keys = get_close_matches(orientador_key_pdf, list(orientador_keys_to_originals.keys()), n=5, cutoff=0.75)
-            
-            if not matches_keys:
-                print(f"  > Aviso: Não foi possível encontrar um orientador correspondente para a chave '{orientador_key_pdf}' no banco de dados. Pulando...", flush=True)
-                continue
-
-            # Recupera TODAS as variações originais (com e sem acento) dos orientadores que deram match
-            matches_db_orientadores = []
-            for key in matches_keys:
-                matches_db_orientadores.extend(orientador_keys_to_originals[key])
-            
-            # Remove duplicatas se houver
-            matches_db_orientadores = list(set(matches_db_orientadores))
-
-            # Orientadores similares encontrados
-
-            try:
-                # ETAPA 3: Busca os projetos de TODOS os orientadores encontrados (usando o nome com acento do DB)
-                response = self.client.table('projetos').select('id, nome_projeto').in_('orientador', matches_db_orientadores).execute()
-                projetos_do_orientador = response.data
-                
-                # Projetos encontrados para os orientadores correspondentes
-
-                best_match_project = None
-                
-                # --- LÓGICA DE MATCHING RESTAURADA ---
-                if projetos_do_orientador:
-                    
-                    # Camada 1: Busca por correspondência exata primeiro (usando chaves de match)
-                    for p_db in projetos_do_orientador:
-                        p_db_match_key = self._get_project_match_key(p_db['nome_projeto'])
-                        if p_db_match_key == projeto_match_key_pdf:
-                            best_match_project = p_db
-                            # Match exato encontrado
-                            break
-                    
-                    # Camada 2: Verificação de Substring (usando chaves de match)
-                    if not best_match_project:
-                        for p_db in projetos_do_orientador:
-                            p_db_match_key = self._get_project_match_key(p_db['nome_projeto'])
-                            if projeto_match_key_pdf in p_db_match_key:
-                                best_match_project = p_db
-                                # Match por substring encontrado
-                                break
-
-                    # Camada 3: Similaridade de Jaccard (usando chaves de match)
-                    if not best_match_project:
-                        best_jaccard_match = None
-                        highest_score = 0.0
-                        projeto_normalizado_words = set(projeto_match_key_pdf.split())
-                        for p_db in projetos_do_orientador:
-                            db_project_words = set(self._get_project_match_key(p_db['nome_projeto']).split())
-                            if not projeto_normalizado_words or not db_project_words: continue
-                            
-                            intersection = len(projeto_normalizado_words.intersection(db_project_words))
-                            union = len(projeto_normalizado_words.union(db_project_words))
-                            score = intersection / union if union > 0 else 0
-                            
-                            if score > highest_score:
-                                highest_score = score
-                                best_jaccard_match = p_db
-                        
-                        if highest_score >= 0.6:
-                            best_match_project = best_jaccard_match
-                            # Match por similaridade Jaccard encontrado
-
-
-                    # Camada 4: Correspondência "Fuzzy" (usando chaves de match)
-                    if not best_match_project:
-                        match_map = {self._get_project_match_key(p['nome_projeto']): p for p in projetos_do_orientador}
-                        matches = get_close_matches(projeto_match_key_pdf, list(match_map.keys()), n=1, cutoff=0.8)
-                        if matches:
-                            best_match_project = match_map[matches[0]]
-                            # Match fuzzy encontrado
-
-                # 3. Se encontrou um projeto, atualiza a bolsa
-                if best_match_project and best_match_project.get('id'):
-                    projeto_id = best_match_project['id']
-                    numero_perfil = self._normalize_perfil(aprovado.get('numero_perfil'))
-                    # Salva o nome do candidato com acentos
-                    candidato_aprovado = self._normalize_text_for_db(aprovado.get('candidato_aprovado'))
-                    
-                    # --- LÓGICA ANTI-DUPLICAÇÃO DE CANDIDATO ---
-                    # 1. Busca todos os candidatos já aprovados para este projeto (com acentos)
-                    response_candidatos_existentes = self.client.table('bolsas').select('candidato_aprovado').eq('projeto_id', projeto_id).eq('status', 'preenchida').execute()
-                    candidatos_existentes_db = [c['candidato_aprovado'] for c in response_candidatos_existentes.data if c.get('candidato_aprovado')]
-
-                    # 2. Compara usando chaves de match (sem acentos)
-                    if candidatos_existentes_db:
-                        candidato_aprovado_key = self._get_match_key(candidato_aprovado)
-                        candidatos_existentes_keys = [self._get_match_key(c) for c in candidatos_existentes_db]
-                        matches = get_close_matches(candidato_aprovado_key, candidatos_existentes_keys, n=1, cutoff=0.95)
-                        if matches:
-                            continue # Pula para o próximo aprovado da lista
-                    
-                    # --- CORREÇÃO FINAL: Lógica de SELECT-THEN-UPDATE ---
-                    # 1. Encontrar UMA bolsa disponível que corresponda aos critérios.
-                    select_bolsa_response = self.client.table('bolsas').select('id').eq('projeto_id', projeto_id).eq('numero_perfil', numero_perfil).eq('status', 'disponivel').limit(1).execute()
-
-                    if select_bolsa_response.data:
-                        bolsa_id_para_atualizar = select_bolsa_response.data[0]['id']
-                        
-                        # 2. Atualizar a bolsa específica usando seu ID.
-                        update_response = self.client.table('bolsas').update({
-                            'status': 'preenchida',
-                            'candidato_aprovado': candidato_aprovado
-                        }).eq('id', bolsa_id_para_atualizar).execute()
-                        
-                        if update_response.data:
-                            bolsas_atualizadas += 1
-                    else:
-                        projeto_nome_para_log = self._normalize_text_for_db(projeto_original)
-                        print(f"  > Aviso: Nenhuma bolsa disponível encontrada para o projeto '{projeto_nome_para_log}' com perfil '{numero_perfil}'.", flush=True)
-                else:
-                    # --- INÍCIO DA LÓGICA DE FALLBACK v2 (Mais Segura) ---
-                    # Se a correspondência do nome do projeto falhou, verificamos se é seguro usar um fallback.
-                    # É seguro APENAS se o orientador tiver UM ÚNICO projeto cadastrado, eliminando ambiguidades.
-                    print(f"  > [Fallback] Match de nome falhou. Verificando se o orientador '{orientador_original}' tem apenas um projeto para desambiguação.", flush=True)
-                    
-                    # Conta quantos projetos o orientador tem no total.
-                    count_response = self.client.table('projetos').select('id', count='exact').in_('orientador', matches_db_orientadores).execute()
-                    
-                    if count_response.count == 1:
-                        # SUCESSO SEM AMBIGUIDADE: O orientador só tem 1 projeto, então podemos associar a bolsa a ele.
-                        projeto_id = count_response.data[0]['id']
-                        numero_perfil = self._normalize_perfil(aprovado.get('numero_perfil'))
-                        candidato_aprovado = self._normalize_text_for_db(aprovado.get('candidato_aprovado'))
-                        print(f"  > [Fallback] Sucesso! O orientador tem um único projeto (ID: {projeto_id}). Procurando bolsa disponível.", flush=True)
-
-                        # Procura uma bolsa disponível nesse único projeto com o perfil correto.
-                        select_bolsa_response = self.client.table('bolsas').select('id').eq('projeto_id', projeto_id).eq('numero_perfil', numero_perfil).eq('status', 'disponivel').limit(1).execute()
-
-                        if select_bolsa_response.data:
-                            bolsa_id_para_atualizar = select_bolsa_response.data[0]['id']
-                            update_response = self.client.table('bolsas').update({
-                                'status': 'preenchida',
-                                'candidato_aprovado': candidato_aprovado
-                            }).eq('id', bolsa_id_para_atualizar).execute()
-                            
-                            if update_response.data:
-                                bolsas_atualizadas += 1
-                        else:
-                             print(f"  > [Fallback] Aviso: Nenhuma bolsa disponível encontrada para o projeto único do orientador '{orientador_original}' com perfil '{numero_perfil}'.", flush=True)
-                    else:
-                        # FALHA FINAL: O orientador tem 0 ou mais de 1 projeto, então não é seguro fazer o fallback.
-                        print(f"  > Aviso: Nenhum projeto encontrado para o orientador '{matches_db_orientadores[0] if matches_db_orientadores else orientador_original}' com o nome de projeto '{projeto_original}'. Fallback não aplicado devido a {count_response.count} projetos associados (risco de ambiguidade).", flush=True)
-                    # --- FIM DA LÓGICA DE FALLBACK ---
-
-            except Exception as e:
-                print(f"  > Erro ao atualizar bolsa para o candidato '{aprovado.get('candidato_aprovado')}': {e}", flush=True)
-        
-        print(f"  > {bolsas_atualizadas} bolsas foram atualizadas para 'preenchida'.", flush=True)
-        return bolsas_atualizadas
+        # Esta função agora delega diretamente para a versão otimizada.
+        # A implementação antiga e mais lenta foi removida.
+        return self._atualizar_bolsas_otimizado(aprovados, edital_url)
     
     def _atualizar_bolsas_otimizado(self, aprovados: list, edital_url: str):
         """🚀 Versão otimizada com batch processing"""
@@ -718,7 +446,7 @@ class SupabaseManager:
             
             if q:
                 # Normaliza a query do usuário para ser sem acentos antes de passar para o FTS
-                q_normalized = self._get_match_key(q)
+                q_normalized = get_match_key(q)
                 search_terms = q_normalized.split()
                 search_query = " & ".join([f"{term}:*" for term in search_terms])
                 query = query.filter('fts', 'fts(portuguese)', search_query)
@@ -766,7 +494,7 @@ class SupabaseManager:
                     elif tipo == 'UA Fundamental':
                         all_query = all_query.or_('tipo.ilike.%UA%,tipo.ilike.%Universidade Aberta%').ilike('tipo', '%Fundamental%')
                 if q:
-                    q_normalized = self._get_match_key(q)
+                    q_normalized = get_match_key(q)
                     search_terms = q_normalized.split()
                     search_query = " & ".join([f"{term}:*" for term in search_terms])
                     all_query = all_query.filter('fts', 'fts(portuguese)', search_query)
@@ -842,7 +570,7 @@ class SupabaseManager:
             
             if q:
                 # Normaliza a query do usuário para ser sem acentos antes de passar para o FTS
-                q_normalized = self._get_match_key(q)
+                q_normalized = get_match_key(q)
                 search_terms = q_normalized.split()
                 search_query = " & ".join([f"{term}:*" for term in search_terms])
                 query = query.filter('fts', 'fts(portuguese)', search_query)

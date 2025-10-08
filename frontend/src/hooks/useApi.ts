@@ -25,18 +25,20 @@ const apiFetcher = async <T>(
     if (!response.ok) {
       // Tenta extrair uma mensagem de erro da API, se houver
       const errorData = await response.json().catch(() => null);
-      throw new Error(
-        errorData?.detail || `Erro na requisição: ${response.statusText}`
-      );
+      const errorMessage =
+        errorData?.detail || `Erro na requisição: ${response.statusText}`;
+      // Lança o erro detalhado para ser pego pelo React Query e logado no console
+      throw new Error(errorMessage);
     }
     return response.json();
   } catch (error) {
-    // Exibe a notificação de erro para o usuário
-    toast.error("Erro de API", {
+    // Loga o erro detalhado no console para depuração
+    console.error("Erro detalhado da API:", error);
+
+    // Exibe uma notificação de erro genérica para o usuário
+    toast.error("Ops! Ocorreu um erro", {
       description:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível conectar ao servidor.",
+        "Não foi possível conectar ao servidor. Por favor, tente novamente mais tarde.",
     });
     // Relança o erro para que o React Query possa gerenciá-lo
     throw error;
@@ -47,6 +49,11 @@ const apiFetcher = async <T>(
 export const fetchMetadata = () => {
   // Usamos o fetcher diretamente, pois não precisa ser um hook do React Query
   return apiFetcher<Metadata>("/api/metadata");
+};
+
+// Fetcher for a single bolsa (not a hook)
+export const fetchBolsa = (id: string, increment: boolean = false) => {
+  return apiFetcher<Bolsa>(`/api/bolsas/${id}?increment_view=${increment}`);
 };
 
 // Fetch bolsas with filters
@@ -71,7 +78,7 @@ export const useBolsas = (filters: FilterParams = {}) => {
 export const useBolsaData = (id: string) => {
   return useQuery<Bolsa, Error>({
     queryKey: ["bolsa-data", id],
-    queryFn: () => apiFetcher<Bolsa>(`/api/bolsas/${id}?increment_view=false`),
+    queryFn: () => fetchBolsa(id, false),
     enabled: !!id,
     staleTime: 5 * 60 * 1000, // 5 minutes
   });
@@ -114,9 +121,7 @@ export const useBolsa = (id: string) => {
     queryKey: ["bolsa", id],
     queryFn: async () => {
       // Primeiro, busca os dados da bolsa sem incrementar views
-      const bolsa = await apiFetcher<Bolsa>(
-        `/api/bolsas/${id}?increment_view=false`
-      );
+      const bolsa = await fetchBolsa(id, false);
 
       // Verifica se já foi vista nesta sessão
       if (!hasViewedBolsa(id)) {
@@ -175,35 +180,5 @@ export const useEditais = () => {
     queryKey: ["editais"],
     queryFn: () => apiFetcher<EditaisResponse>("/api/editais"),
     staleTime: 30 * 60 * 1000, // 30 minutes
-  });
-};
-
-// Trigger scrape
-export const useScrape = () => {
-  return useMutation({
-    mutationFn: async () => {
-      // A chave de API deve ser configurada nas variáveis de ambiente do Vite
-      const apiKey = import.meta.env.VITE_SCRAPER_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          "A chave de API do scraper não está configurada no frontend."
-        );
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/scrape`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
-      if (!response.ok) {
-        const errorData = await response
-          .json()
-          .catch(() => ({ message: "Failed to start scrape" }));
-        throw new Error(errorData.message || "Failed to start scrape");
-      }
-      return response.json();
-    },
   });
 };
