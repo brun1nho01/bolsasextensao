@@ -32,11 +32,11 @@ class JWTAuthManager:
         self.refresh_token_expire_days = 30  # 30 dias
         
         if not self.secret_key:
-            logger.warning(
-                "⚠️ JWT_SECRET_KEY não configurada. "
-                "Usando fallback para SCRAPER_API_KEY (não recomendado para produção)"
+            logger.critical(
+                "🚨 FATAL: A variável de ambiente JWT_SECRET_KEY não está configurada. "
+                "A aplicação não pode iniciar de forma segura."
             )
-            self.secret_key = os.getenv("SCRAPER_API_KEY", "default-secret-key-CHANGE-ME")
+            raise ValueError("JWT_SECRET_KEY não foi definida no ambiente.")
     
     def create_access_token(
         self, 

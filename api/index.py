@@ -1120,32 +1120,45 @@ class handler(BaseHTTPRequestHandler):
         elif path == '/api/scrape':
             # Endpoint para executar scraping manualmente ou via cron
             try:
-                # Verificar se foi chamado pelo cron da Vercel
-                cron_secret = os.environ.get("CRON_SECRET", "")
-                provided_secret = query_params.get('secret', [''])[0] if query_params.get('secret') else ''
+                # Verificar se foi chamado pelo cron da Vercel (mais seguro)
+                cron_secret_header = self.headers.get('x-vercel-cron-authorization', '').replace('Bearer ', '')
+                cron_secret_env = os.environ.get("CRON_SECRET", "")
                 
-                # Se há um secret configurado, validar
-                if cron_secret and provided_secret != cron_secret:
-                    response = {"error": "Unauthorized", "message": "Invalid secret"}
-                    return self.send_json_response(response, status_code=401, cache_seconds=0)  # Sem cache
-                else:
-                    # Executar scraping na versão serverless
+                is_cron_authorized = False
+                if cron_secret_env and cron_secret_header:
+                    import hmac
+                    is_cron_authorized = hmac.compare_digest(cron_secret_header, cron_secret_env)
+
+                if is_cron_authorized:
+                    # Execução via Cron Job autenticado
                     scraping_result = run_scraping_serverless()
-                    
                     response = {
-                        "message": "Scraping executado com sucesso",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
-                        "status": "completed",
+                        "message": "Scraping executado via cron com sucesso.",
                         "result": scraping_result
                     }
-                    return self.send_json_response(response, cache_seconds=0)  # Sem cache
+                    return self.send_json_response(response, status_code=200, cache_seconds=0)
+
+                # Fallback para o método antigo com ?secret=... (se a verificação do header falhar)
+                provided_secret = query_params.get('secret', [''])[0] if query_params.get('secret') else ''
+                if cron_secret_env and provided_secret == cron_secret_env:
+                    scraping_result = run_scraping_serverless()
+                    response = {
+                        "message": "Scraping executado via secret de URL com sucesso.",
+                        "result": scraping_result
+                    }
+                    return self.send_json_response(response, status_code=200, cache_seconds=0)
+
+                # Se nenhuma das autenticações passar
+                response = {"error": "Unauthorized", "message": "Autenticação do Cron Job falhou."}
+                return self.send_json_response(response, status_code=401, cache_seconds=0)
+
             except Exception as e:
                 response = {
                     "error": "Scraping failed", 
                     "message": str(e),
                     "timestamp": datetime.now(timezone.utc).isoformat()
                 }
-                return self.send_json_response(response, status_code=500, cache_seconds=0)  # Sem cache
+                return self.send_json_response(response, status_code=500, cache_seconds=0)
                 
         elif path == '/api/metadata':
             # Tentar buscar dados reais do Supabase
@@ -1769,6 +1782,72 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(json.dumps(response).encode('utf-8'))
                 return
         
+        elif path == '/api/scrape':
+            # Endpoint para iniciar o scraping manualmente (protegido)
+            try:
+                import hmac
+                
+                # Obter a chave da variável de ambiente
+                scraper_api_key = os.getenv("SCRAPER_API_KEY")
+                provided_key = self.headers.get('Authorization', '').replace('Bearer ', '')
+
+                if not scraper_api_key or not provided_key:
+                    response = {"error": "Unauthorized", "message": "Chave de API não configurada ou não fornecida."}
+                    return self.send_json_response(response, status_code=401, cache_seconds=0)
+
+                # Comparação segura contra timing attacks
+                if not hmac.compare_digest(provided_key, scraper_api_key):
+                    response = {"error": "Unauthorized", "message": "Chave de API inválida."}
+                    return self.send_json_response(response, status_code=401, cache_seconds=0)
+                
+                # Executa o scraping (de forma síncrona, pois não há 'background tasks' aqui)
+                # O cliente precisará esperar a conclusão.
+                scraping_result = run_scraping_serverless()
+                
+                response = {
+                    "message": "Processo de scraping iniciado.",
+                    "result": scraping_result
+                }
+                return self.send_json_response(response, status_code=202, cache_seconds=0)
+
+            except Exception as e:
+                response = {"error": "Falha ao iniciar o scraping", "message": str(e)}
+                return self.send_json_response(response, status_code=500, cache_seconds=0)
+        
+        elif path == '/api/notify':
+            # Endpoint interno para disparar notificações (protegido)
+            try:
+                import hmac
+
+                # Protegido pela mesma chave do scraper
+                api_key = os.getenv("SCRAPER_API_KEY")
+                provided_key = self.headers.get('Authorization', '').replace('Bearer ', '')
+
+                if not api_key or not hmac.compare_digest(provided_key, api_key):
+                    return self.send_json_response({"error": "Unauthorized"}, status_code=401, cache_seconds=0)
+
+                # Extrai dados do corpo da requisição
+                titulo = data.get('titulo')
+                link = data.get('link')
+                tipo = data.get('tipo')
+                usuarios = data.get('usuarios')
+
+                if not all([titulo, link, tipo]):
+                    return self.send_json_response({"error": "Dados insuficientes para notificação"}, status_code=400, cache_seconds=0)
+                
+                # Chama a função de notificação existente
+                result = notify_new_edital(
+                    edital_titulo=titulo,
+                    edital_link=link,
+                    edital_type=tipo,
+                    usuarios_filtrados=usuarios
+                )
+                
+                return self.send_json_response(result, status_code=200, cache_seconds=0)
+
+            except Exception as e:
+                return self.send_json_response({"error": "Falha ao enviar notificação", "message": str(e)}, status_code=500, cache_seconds=0)
+
         else:
             response = {"error": "Endpoint POST não encontrado", "path": path}
             return self.send_json_response(response, status_code=404, cache_seconds=0)

@@ -182,11 +182,26 @@ export const useEditais = () => {
 export const useScrape = () => {
   return useMutation({
     mutationFn: async () => {
-      const response = await fetch(`${API_BASE_URL}/api/scrape/start`, {
+      // A chave de API deve ser configurada nas variáveis de ambiente do Vite
+      const apiKey = import.meta.env.VITE_SCRAPER_API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          "A chave de API do scraper não está configurada no frontend."
+        );
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/scrape`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
       });
       if (!response.ok) {
-        throw new Error("Failed to start scrape");
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: "Failed to start scrape" }));
+        throw new Error(errorData.message || "Failed to start scrape");
       }
       return response.json();
     },

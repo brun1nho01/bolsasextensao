@@ -5,7 +5,7 @@
   "devCommand": "cd frontend && npm run dev",
   "crons": [
     {
-      "path": "/api/scrape?secret=my-scraping-secret-2024",
+      "path": "/api/scrape",
       "schedule": "0 9 * * *"
     }
   ],

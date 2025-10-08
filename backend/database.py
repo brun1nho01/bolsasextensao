@@ -26,7 +26,7 @@ class SupabaseManager:
     """
     Gerencia a comunicação com o banco de dados Supabase.
     """
-    def __init__(self, supabase_url: str, supabase_key: str):
+    def __init__(self):
         url = os.environ.get("SUPABASE_URL")
         key = os.environ.get("SUPABASE_KEY")
         
@@ -299,10 +299,11 @@ class SupabaseManager:
                 
                 if is_edital_novo:  # ← VERIFICAÇÃO CRÍTICA: Só notifica editais NOVOS
                     try:
-                        tipo_edital = edital_data.get('etapa', 'inscricao')  # 'inscricao' ou 'resultado'
-                        modalidade = edital_data.get('modalidade', 'extensao')  # ← NOVO: 'extensao' ou 'apoio_academico'
+                        import requests
                         
-                        # Define tipo de notificação baseado na modalidade
+                        tipo_edital = edital_data.get('etapa', 'inscricao')  # 'inscricao' ou 'resultado'
+                        modalidade = edital_data.get('modalidade', 'extensao')
+                        
                         if modalidade == 'apoio_academico':
                             tipo_notificacao = 'apoio_academico'
                         elif tipo_edital == 'resultado':
@@ -310,30 +311,37 @@ class SupabaseManager:
                         else:
                             tipo_notificacao = 'extensao'
                         
-                        # ✅ Busca usuários que querem receber esse tipo de edital
                         usuarios_interessados = self._buscar_usuarios_por_preferencia(modalidade)
                         
                         if not usuarios_interessados:
                             print(f"ℹ️ [SEM USUÁRIOS] Nenhum usuário quer receber '{modalidade}'. Não notificando.")
                             return final_edital_id
                         
-                        # Log da tentativa de notificação
-                        print(f"📱 [NOVO EDITAL] Preparando notificação: '{edital_data.get('titulo')}'")
-                        print(f"   ├─ Tipo Edital: {tipo_edital}")
-                        print(f"   ├─ Modalidade: {modalidade}")
-                        print(f"   ├─ Tipo Notificação: {tipo_notificacao}")
-                        print(f"   ├─ Usuários interessados: {len(usuarios_interessados)}")
-                        print(f"   └─ Link: {edital_url}")
+                        # Prepara chamada para o endpoint de notificação
+                        api_url = os.environ.get("API_BASE_URL_FOR_SCRAPER", "https://bolsasextensao.vercel.app/api")
+                        api_key = os.environ.get("SCRAPER_API_KEY")
+
+                        if not api_key:
+                            print("⚠️ SCRAPER_API_KEY não configurada. Não é possível notificar via API.")
+                            return final_edital_id
+                            
+                        notification_payload = {
+                            "titulo": edital_data.get('titulo', 'Novo Edital'),
+                            "link": edital_url,
+                            "tipo": tipo_notificacao,
+                            "usuarios": usuarios_interessados
+                        }
+                        headers = {
+                            "Content-Type": "application/json",
+                            "Authorization": f"Bearer {api_key}"
+                        }
                         
-                        # Chama sistema de notificações
-                        from telegram_integration import call_telegram_notifications
-                        
-                        notification_result = call_telegram_notifications(
-                            titulo=edital_data.get('titulo', 'Novo Edital'),
-                            link=edital_url,
-                            tipo=tipo_notificacao,
-                            usuarios=usuarios_interessados  # ← NOVO: Passa lista filtrada
-                        )
+                        print(f"📱 [NOVO EDITAL] Disparando notificação via API para {len(usuarios_interessados)} usuário(s)...")
+
+                        response = requests.post(f"{api_url}/notify", json=notification_payload, headers=headers, timeout=30)
+                        response.raise_for_status() # Lança erro se status não for 2xx
+
+                        notification_result = response.json()
                         
                         # Registra no histórico
                         self._registrar_notificacao_enviada(
@@ -345,10 +353,10 @@ class SupabaseManager:
                             resultado=notification_result
                         )
                         
-                        print(f"✅ Notificação enviada e registrada: {notification_result.get('status', 'unknown')}")
+                        print(f"✅ Notificação enviada via API: {notification_result.get('status', 'unknown')}")
                             
                     except Exception as e:
-                        print(f"❌ Erro ao enviar notificação: {e}")
+                        print(f"❌ Erro ao disparar notificação via API: {e}")
                         # Registra erro no histórico mesmo assim
                         try:
                             self._registrar_notificacao_enviada(
