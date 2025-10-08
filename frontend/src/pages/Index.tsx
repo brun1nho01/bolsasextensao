@@ -63,7 +63,7 @@ const Index = () => {
     const status = searchParams.get("status") || "all";
     const tipo = searchParams.get("tipo") || "all";
     const centro = searchParams.get("centro") || "all";
-    const orientador = searchParams.get("orientador") || "all"; // Chave ausente adicionada
+    const orientador = searchParams.get("orientador") || "all";
     const sort = searchParams.get("sort") || "nome_projeto";
     const order = (searchParams.get("order") as "asc" | "desc") || "asc";
 
@@ -111,11 +111,13 @@ const Index = () => {
           section: newSearchParams.get("section"),
           sort: newSearchParams.get("sort"),
           order: newSearchParams.get("order"),
+          page: newSearchParams.get("page"), // Mantém a página atual
         };
         const clearedParams = new URLSearchParams();
         if (preserved.section) clearedParams.set("section", preserved.section);
         if (preserved.sort) clearedParams.set("sort", preserved.sort);
         if (preserved.order) clearedParams.set("order", preserved.order);
+        if (preserved.page) clearedParams.set("page", preserved.page);
 
         return clearedParams;
       },
@@ -194,9 +196,8 @@ const Index = () => {
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setSelectedBolsaId(null);
-    // Invalida as queries de "bolsas" e "ranking" para buscar os dados atualizados
-    queryClient.invalidateQueries({ queryKey: ["bolsas"] });
-    queryClient.invalidateQueries({ queryKey: ["ranking"] });
+    // Não invalida queries aqui para evitar re-fetches desnecessários durante navegação
+    // As queries serão invalidadas automaticamente pelo incremento de view count
   };
 
   return (
