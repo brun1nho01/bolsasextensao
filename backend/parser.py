@@ -30,16 +30,18 @@ def _save_error_log(context: str, content: str):
 class UenfParser:
     def __init__(self):
         load_dotenv()
-        keys_str = os.getenv("GEMINI_API_KEYS")
-        if not keys_str:
-            raise ValueError("GEMINI_API_KEYS não encontrada no .env. Por favor, adicione uma ou mais chaves separadas por vírgula.")
         
-        self.api_keys = [key.strip() for key in keys_str.split(',') if key.strip()]
-        if not self.api_keys:
-            raise ValueError("Nenhuma chave de API válida encontrada em GEMINI_API_KEYS.")
+        # ✅ CORREÇÃO: Usar gerenciador seguro de API keys
+        from api_key_manager import key_manager
+        
+        try:
+            self.api_keys = key_manager.get_gemini_keys()
+            self.key_manager = key_manager
+        except ValueError as e:
+            raise ValueError(f"Erro ao carregar API keys: {e}")
             
         self.current_key_index = 0
-        print(f"  > {len(self.api_keys)} chave(s) de API do Gemini carregada(s).")
+        print(f"  > {len(self.api_keys)} chave(s) de API do Gemini carregada(s) de forma segura.")
         
         # A configuração inicial da chave será feita na primeira chamada.
         genai.configure(api_key=self.api_keys[self.current_key_index])
@@ -66,6 +68,10 @@ class UenfParser:
             try:
                 # Usa a chave atual para a requisição
                 print(f"  > [API] Usando chave de API #{self.current_key_index + 1}...")
+                
+                # ✅ CORREÇÃO: Rastrear uso da chave
+                self.key_manager.track_usage(self.current_key_index)
+                
                 response = self.model.generate_content(prompt, request_options={'timeout': 600})
                 return response # Sucesso, retorna a resposta
 

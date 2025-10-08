@@ -4,6 +4,9 @@ import urllib.parse
 import os
 from datetime import datetime, timezone
 
+# ✅ CORREÇÃO: Importar rate limiter
+from rate_limiter_vercel import apply_rate_limit, vercel_limiter
+
 # Importar Supabase apenas se disponível (para não quebrar outros endpoints)
 try:
     from supabase import create_client
@@ -775,21 +778,15 @@ def notify_new_edital(edital_titulo, edital_link, edital_type=None, usuarios_fil
             tipo_nome = "NOVO EDITAL"
             mensagem_extra = "💡 Nova oportunidade disponível!"
             
-        # Escapar caracteres especiais do HTML
-        edital_titulo_safe = edital_titulo.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        edital_link_safe = edital_link.replace('&', '&amp;')
+        # ✅ CORREÇÃO: Usar sanitização segura contra XSS
+        from security_utils import create_telegram_safe_message
         
-        mensagem = f"""{emoji} <b>{tipo_nome} UENF!</b>
-
-📋 {edital_titulo_safe}
-
-🔗 <a href="{edital_link_safe}">Acessar Edital</a>
-
-{mensagem_extra}
-
-💻 <a href="https://bolsasextensao.vercel.app/">Ver todas as bolsas</a>
-
-<i>Para cancelar alertas, digite /stop</i>"""
+        mensagem = create_telegram_safe_message(
+            tipo_edital=edital_type or 'desconhecido',
+            titulo=edital_titulo,
+            link=edital_link,
+            mensagem_extra=mensagem_extra
+        )
 
         # Enviar para todos (usando lista filtrada ou completa)
         sent_count = 0
@@ -944,9 +941,13 @@ class handler(BaseHTTPRequestHandler):
         
         # Headers básicos
         self.send_header('Content-type', 'application/json; charset=utf-8')
-        self.send_header('Access-Control-Allow-Origin', '*')
-        self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        
+        # ✅ CORREÇÃO: CORS seguro (sem wildcard)
+        from security_utils import build_cors_headers
+        origin = self.headers.get('Origin', '')
+        cors_headers = build_cors_headers(origin)
+        for header, value in cors_headers.items():
+            self.send_header(header, value)
         
         # Headers de cache (para melhor performance)
         if cache_seconds > 0:
@@ -970,6 +971,26 @@ class handler(BaseHTTPRequestHandler):
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
         query_params = urllib.parse.parse_qs(parsed_path.query)
+        
+        # ✅ CORREÇÃO: Aplicar rate limiting
+        rate_limit_error = apply_rate_limit(dict(self.headers), path)
+        if rate_limit_error:
+            # Headers de rate limit
+            _, info = vercel_limiter.check_limit(
+                vercel_limiter.get_client_ip(dict(self.headers)), 
+                path
+            )
+            
+            self.send_response(429)  # Too Many Requests
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('X-RateLimit-Limit', str(info.get('limit', 0)))
+            self.send_header('X-RateLimit-Remaining', str(info.get('remaining', 0)))
+            self.send_header('X-RateLimit-Reset', str(info.get('reset', 0)))
+            self.send_header('Retry-After', str(info.get('retry_after', 60)))
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(rate_limit_error).encode('utf-8'))
+            return
         
         # Roteamento com cache otimizado
         if path == '/api/' or path == '/api':
@@ -1537,6 +1558,25 @@ class handler(BaseHTTPRequestHandler):
         # Parse da URL
         parsed_path = urllib.parse.urlparse(self.path)
         path = parsed_path.path
+        
+        # ✅ CORREÇÃO: Aplicar rate limiting em POST também
+        rate_limit_error = apply_rate_limit(dict(self.headers), path)
+        if rate_limit_error:
+            _, info = vercel_limiter.check_limit(
+                vercel_limiter.get_client_ip(dict(self.headers)), 
+                path
+            )
+            
+            self.send_response(429)  # Too Many Requests
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('X-RateLimit-Limit', str(info.get('limit', 0)))
+            self.send_header('X-RateLimit-Remaining', str(info.get('remaining', 0)))
+            self.send_header('X-RateLimit-Reset', str(info.get('reset', 0)))
+            self.send_header('Retry-After', str(info.get('retry_after', 60)))
+            self.end_headers()
+            
+            self.wfile.write(json.dumps(rate_limit_error).encode('utf-8'))
+            return
         
         # Ler dados do corpo da requisição
         content_length = int(self.headers.get('Content-Length', 0))

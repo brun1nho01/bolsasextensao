@@ -44,13 +44,45 @@ def get_db_manager():
 
 # --- Dependência de Segurança ---
 def verify_api_key(x_api_key: str = Header(...)):
-    """Verifica se a chave de API enviada no header é válida."""
-    scraper_api_key = os.environ.get("SCRAPER_API_KEY")
-    if not scraper_api_key:
-        raise HTTPException(status_code=500, detail="Chave de API do servidor não configurada.")
-    if x_api_key != scraper_api_key:
-        raise HTTPException(status_code=401, detail="Chave de API inválida ou ausente.")
-    return True
+    """
+    ✅ CORREÇÃO: Verifica API key de forma segura contra timing attacks
+    (Mantido para compatibilidade - recomenda-se usar JWT)
+    """
+    from api_key_manager import key_manager
+    
+    try:
+        is_valid = key_manager.verify_scraper_key_secure(x_api_key)
+        
+        if not is_valid:
+            raise HTTPException(
+                status_code=401, 
+                detail="Chave de API inválida ou ausente"
+            )
+        
+        return True
+        
+    except RuntimeError as e:
+        raise HTTPException(
+            status_code=500, 
+            detail="Erro na configuração do servidor"
+        )
+
+
+# --- Nova Autenticação JWT (Recomendada) ---
+def verify_jwt_or_api_key(
+    x_api_key: Optional[str] = Header(None),
+    authorization: Optional[str] = Header(None)
+):
+    """
+    ✅ CORREÇÃO: Autenticação robusta com JWT ou API Key (fallback)
+    
+    Aceita ambos para transição suave:
+    - JWT Bearer token (recomendado)
+    - X-API-Key (legado, ainda suportado)
+    """
+    from jwt_auth import verify_api_key_or_jwt
+    
+    return verify_api_key_or_jwt(x_api_key, authorization)
 
 
 @app.get("/", tags=["Root"])

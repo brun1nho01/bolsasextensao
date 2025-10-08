@@ -6,3 +6,6 @@ requests==2.31.0
 
 # WhatsApp via Twilio (backup - funciona sem)
 twilio==9.2.3
+
+# JWT para autenticação segura
+PyJWT==2.10.1
