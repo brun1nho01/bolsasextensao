@@ -29,8 +29,9 @@ export function HeroSection({
 
   useEffect(() => {
     // Dispara a busca apenas quando o valor debounced muda
+    // Remove onSearch das dependências para evitar loops infinitos
     onSearch(debouncedSearchQuery);
-  }, [debouncedSearchQuery, onSearch]);
+  }, [debouncedSearchQuery]);
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden">

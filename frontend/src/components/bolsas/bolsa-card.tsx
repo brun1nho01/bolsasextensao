@@ -47,23 +47,38 @@ export function BolsaCard({ bolsa, onClick, index }: BolsaCardProps) {
   const queryClient = useQueryClient();
 
   const handleMouseEnter = () => {
+    // Verifica se já existe cache para evitar prefetch desnecessário
+    const existingData = queryClient.getQueryData(["bolsa", bolsa.id]);
+    if (existingData) {
+      return; // Já tem cache, não precisa prefetch
+    }
+
     // Adia o prefetch para um momento em que o navegador esteja ocioso
     // Isso garante que a animação de hover não seja bloqueada.
     if ("requestIdleCallback" in window) {
       window.requestIdleCallback(() => {
-        queryClient.prefetchQuery({
-          queryKey: ["bolsa", bolsa.id],
-          queryFn: () => fetchBolsa(bolsa.id),
-        });
+        // Verifica novamente antes de fazer o prefetch
+        const currentData = queryClient.getQueryData(["bolsa", bolsa.id]);
+        if (!currentData) {
+          queryClient.prefetchQuery({
+            queryKey: ["bolsa", bolsa.id],
+            queryFn: () => fetchBolsa(bolsa.id),
+            staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+          });
+        }
       });
     } else {
       // Fallback para navegadores mais antigos
       setTimeout(() => {
-        queryClient.prefetchQuery({
-          queryKey: ["bolsa", bolsa.id],
-          queryFn: () => fetchBolsa(bolsa.id),
-        });
-      }, 100);
+        const currentData = queryClient.getQueryData(["bolsa", bolsa.id]);
+        if (!currentData) {
+          queryClient.prefetchQuery({
+            queryKey: ["bolsa", bolsa.id],
+            queryFn: () => fetchBolsa(bolsa.id),
+            staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+          });
+        }
+      }, 150); // Aumenta um pouco o delay
     }
   };
 

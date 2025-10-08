@@ -50,14 +50,16 @@ const VersionChecker = () => {
         const lastKnownDataUpdate = localStorage.getItem(CACHE_VERSION_KEY);
         if (lastKnownDataUpdate !== metadata.last_data_update) {
           console.log(
-            `[Cache Check] Novos dados detectados! Limpando cache de queries. Local: ${lastKnownDataUpdate}, Servidor: ${metadata.last_data_update}`
+            `[Cache Check] Novos dados detectados! Limpando cache específico. Local: ${lastKnownDataUpdate}, Servidor: ${metadata.last_data_update}`
           );
           toast.info("Dados atualizados!", {
             description: "Novas bolsas e editais foram carregados.",
             duration: 3000,
           });
-          // Invalida todas as queries para forçar a busca de novos dados
-          await queryClient.invalidateQueries();
+          // Invalida apenas queries específicas em vez de todas
+          await queryClient.invalidateQueries({ queryKey: ["bolsas"] });
+          await queryClient.invalidateQueries({ queryKey: ["ranking"] });
+          await queryClient.invalidateQueries({ queryKey: ["editais"] });
           localStorage.setItem(CACHE_VERSION_KEY, metadata.last_data_update);
         } else {
           console.log("[Cache Check] Cache de dados está atualizado.");
@@ -78,6 +80,13 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       gcTime: 1000 * 60 * 60 * 24, // 24 horas
+      staleTime: 5 * 60 * 1000, // 5 minutos (dados ficam frescos por mais tempo)
+      refetchOnWindowFocus: false, // Reduz refetches desnecessários
+      refetchOnMount: false, // Usa cache existente quando possível
+      retry: 1, // Reduz tentativas de retry
+    },
+    mutations: {
+      retry: 1, // Reduz tentativas de retry em mutações
     },
   },
 });

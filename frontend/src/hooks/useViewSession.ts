@@ -82,12 +82,14 @@ export const useViewSession = () => {
         return false; // Já foi vista
       }
 
-      // Adiciona à sessão atual
-      session.viewedBolsas.add(bolsaId);
+      // Cria um novo Set para evitar mutação direta
+      const newViewedBolsas = new Set(session.viewedBolsas);
+      newViewedBolsas.add(bolsaId);
+      session.viewedBolsas = newViewedBolsas;
 
       // Persiste no sessionStorage
       try {
-        const viewedArray = Array.from(session.viewedBolsas);
+        const viewedArray = Array.from(newViewedBolsas);
         sessionStorage.setItem(VIEWED_BOLSAS_KEY, JSON.stringify(viewedArray));
       } catch (error) {
         console.warn("Erro ao salvar bolsa vista:", error);
@@ -102,7 +104,8 @@ export const useViewSession = () => {
    * Limpa todas as bolsas vistas (útil para debug ou reset)
    */
   const clearViewedBolsas = useCallback(() => {
-    session.viewedBolsas.clear();
+    // Cria um novo Set vazio para evitar mutação direta
+    session.viewedBolsas = new Set<string>();
     try {
       sessionStorage.setItem(VIEWED_BOLSAS_KEY, JSON.stringify([]));
     } catch (error) {
