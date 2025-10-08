@@ -57,7 +57,10 @@ export const fetchBolsa = (id: string, increment: boolean = false) => {
 };
 
 // Fetch bolsas with filters
-export const useBolsas = (filters: FilterParams = {}) => {
+export const useBolsas = (
+  filters: FilterParams = {},
+  enabled: boolean = true
+) => {
   return useQuery<BolsasResponse, Error>({
     queryKey: ["bolsas", filters],
     queryFn: () => {
@@ -71,11 +74,12 @@ export const useBolsas = (filters: FilterParams = {}) => {
       return apiFetcher<BolsasResponse>("/api/bolsas", params);
     },
     staleTime: 5 * 60 * 1000, // 5 minutes
+    enabled, // Só executa a query se enabled for true
   });
 };
 
 // Fetch single bolsa details, replacing the old useBolsaData
-export const useBolsa = (id: string) => {
+export const useBolsa = (id: string | null) => {
   return useQuery<Bolsa, Error>({
     queryKey: ["bolsa", id],
     queryFn: () => fetchBolsa(id, false),
@@ -147,19 +151,21 @@ export const useIncrementBolsaView = () => {
 };
 
 // Fetch ranking
-export const useRanking = () => {
+export const useRanking = (enabled: boolean = true) => {
   return useQuery<RankingResponse, Error>({
     queryKey: ["ranking"],
     queryFn: () => apiFetcher<RankingResponse>("/api/ranking"),
     staleTime: 10 * 60 * 1000, // 10 minutes
+    enabled, // Só executa a query se enabled for true
   });
 };
 
 // Fetch editais
-export const useEditais = () => {
+export const useEditais = (enabled: boolean = true) => {
   return useQuery<EditaisResponse, Error>({
     queryKey: ["editais"],
     queryFn: () => apiFetcher<EditaisResponse>("/api/editais"),
     staleTime: 30 * 60 * 1000, // 30 minutes
+    enabled, // Só executa a query se enabled for true
   });
 };
