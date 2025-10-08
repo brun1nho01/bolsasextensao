@@ -17,6 +17,7 @@ interface BolsaListProps {
   bolsas: Bolsa[];
   loading: boolean;
   onBolsaClick: (bolsa: Bolsa) => void;
+  total?: number;
 }
 
 const BolsaListItem = ({
@@ -174,7 +175,12 @@ const BolsaListItem = ({
   );
 };
 
-export function BolsaList({ bolsas, loading, onBolsaClick }: BolsaListProps) {
+export function BolsaList({
+  bolsas,
+  loading,
+  onBolsaClick,
+  total,
+}: BolsaListProps) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -198,14 +204,33 @@ export function BolsaList({ bolsas, loading, onBolsaClick }: BolsaListProps) {
   }
 
   return (
-    <div className="space-y-3">
-      {bolsas.map((bolsa) => (
-        <BolsaListItem
-          key={bolsa.id}
-          bolsa={bolsa}
-          onBolsaClick={onBolsaClick}
-        />
-      ))}
+    <div className="space-y-6">
+      {/* Header com contador */}
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center justify-between flex-wrap gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <h2 className="text-2xl font-bold">Bolsas Ativas</h2>
+          {total && (
+            <Badge variant="outline" className="glass px-3 py-1">
+              {total} {total === 1 ? "resultado" : "resultados"}
+            </Badge>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Lista de bolsas */}
+      <div className="space-y-3">
+        {bolsas.map((bolsa) => (
+          <BolsaListItem
+            key={bolsa.id}
+            bolsa={bolsa}
+            onBolsaClick={onBolsaClick}
+          />
+        ))}
+      </div>
     </div>
   );
 }
